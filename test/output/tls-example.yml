@@ -1,0 +1,45 @@
+typemeta:
+  kind: ""
+  apiversion: ""
+objectmeta:
+  name: tls-example
+  generatename: ""
+  namespace: ""
+  selflink: ""
+  uid: ""
+  resourceversion: ""
+  generation: 0
+  creationtimestamp: "0001-01-01T00:00:00Z"
+  deletiontimestamp: null
+  deletiongraceperiodseconds: null
+  labels: {}
+  annotations: {}
+  ownerreferences: []
+  finalizers: []
+  clustername: ""
+  managedfields: []
+spec:
+  secretstoreref:
+    name: ""
+    kind: ""
+  target:
+    name: tls-example
+    creationpolicy: ""
+    template: null
+  refreshinterval: null
+  data:
+  - secretkey: tls.crt
+    remoteref:
+      key: /development/certificate
+      version: ""
+      property: crt
+  - secretkey: tls.key
+    remoteref:
+      key: /development/certificate
+      version: ""
+      property: key
+  datafrom: []
+status:
+  refreshtime: "0001-01-01T00:00:00Z"
+  syncedresourceversion: ""
+  conditions: []

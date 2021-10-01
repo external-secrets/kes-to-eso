@@ -1,0 +1,15 @@
+apiVersion: kubernetes-client.io/v1
+kind: ExternalSecret
+metadata:
+  name: tls-example
+spec:
+  backendType: secretsManager
+  template:
+    type: kubernetes.io/tls
+  data:
+    - key: /development/certificate
+      property: crt
+      name: tls.crt
+    - key: /development/certificate
+      property: key
+      name: tls.key

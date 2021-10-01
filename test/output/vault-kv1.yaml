@@ -1,0 +1,45 @@
+typemeta:
+  kind: ""
+  apiversion: ""
+objectmeta:
+  name: vault-kv1
+  generatename: ""
+  namespace: test-inheritance
+  selflink: ""
+  uid: ""
+  resourceversion: ""
+  generation: 0
+  creationtimestamp: "0001-01-01T00:00:00Z"
+  deletiontimestamp: null
+  deletiongraceperiodseconds: null
+  labels: {}
+  annotations: {}
+  ownerreferences: []
+  finalizers: []
+  clustername: ""
+  managedfields: []
+spec:
+  secretstoreref:
+    name: ""
+    kind: ""
+  target:
+    name: vault-kv1
+    creationpolicy: ""
+    template: null
+  refreshinterval: null
+  data:
+  - secretkey: username
+    remoteref:
+      key: kv/database
+      version: ""
+      property: db-username
+  - secretkey: password
+    remoteref:
+      key: kv/database
+      version: ""
+      property: db-password
+  datafrom: []
+status:
+  refreshtime: "0001-01-01T00:00:00Z"
+  syncedresourceversion: ""
+  conditions: []

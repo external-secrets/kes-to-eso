@@ -1,0 +1,17 @@
+apiVersion: 'kubernetes-client.io/v1'
+kind: ExternalSecret
+metadata:
+  name: vault-kv1
+  namespace: test-inheritance
+spec:
+  backendType: vault
+  vaultMountPoint: my-kubernetes-vault-mount-point
+  vaultRole: my-vault-role
+  kvVersion: 1
+  data:
+    - name: username
+      key: kv/database
+      property: db-username
+    - name: password
+      key: kv/database
+      property: db-password

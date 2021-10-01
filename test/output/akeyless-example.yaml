@@ -1,0 +1,40 @@
+typemeta:
+  kind: ""
+  apiversion: ""
+objectmeta:
+  name: hello-secret
+  generatename: ""
+  namespace: ""
+  selflink: ""
+  uid: ""
+  resourceversion: ""
+  generation: 0
+  creationtimestamp: "0001-01-01T00:00:00Z"
+  deletiontimestamp: null
+  deletiongraceperiodseconds: null
+  labels: {}
+  annotations: {}
+  ownerreferences: []
+  finalizers: []
+  clustername: ""
+  managedfields: []
+spec:
+  secretstoreref:
+    name: ""
+    kind: ""
+  target:
+    name: hello-secret
+    creationpolicy: ""
+    template: null
+  refreshinterval: null
+  data:
+  - secretkey: creds
+    remoteref:
+      key: secret-name
+      version: ""
+      property: ""
+  datafrom: []
+status:
+  refreshtime: "0001-01-01T00:00:00Z"
+  syncedresourceversion: ""
+  conditions: []
