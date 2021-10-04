@@ -1,4 +1,4 @@
-package main
+package parser
 
 import (
 	"fmt"
@@ -83,7 +83,7 @@ func newSecretStore() api.SecretStore {
 		Kind:       "SecretStore",
 		APIVersion: "external-secrets.io/v1alpha1",
 	}
-	d.ObjectMeta.Name = "SS-auto-gen-" + randSeq(8)
+	d.ObjectMeta.Name = "SecretStore-autogen-" + randSeq(8)
 	return d
 }
 func bindProvider(S api.SecretStore, K KESExternalSecret) api.SecretStore {
@@ -235,12 +235,12 @@ func do_the_thing(path string, info fs.FileInfo, err error) error {
 func ParseKes(path string) {
 	err := filepath.Walk(path, do_the_thing)
 	if err != nil {
-		log.Fatal("Something went wrong!\n%v\n", err)
+		log.Fatalf("Something went wrong!\n%v\n", err)
 		return
 	}
 }
 
 // Helper function for initial developments
-func main() {
-	ParseKes("../test/input/")
-}
+//func main() {
+//	ParseKes("../test/input/")
+//}

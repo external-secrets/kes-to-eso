@@ -1,6 +1,6 @@
 package main
 
-import "kes-to-eso/cmd"
+import "kestoeso/cmd"
 
 func main() {
 	cmd.Execute()
