@@ -1,40 +1,16 @@
-typemeta:
-  kind: ""
-  apiversion: ""
-objectmeta:
+apiVersion: external-secrets.io/v1alpha1
+kind: ExternalSecret
+metadata:
+  creationTimestamp: null
   name: dockerconfig-example
-  generatename: ""
-  namespace: ""
-  selflink: ""
-  uid: ""
-  resourceversion: ""
-  generation: 0
-  creationtimestamp: "0001-01-01T00:00:00Z"
-  deletiontimestamp: null
-  deletiongraceperiodseconds: null
-  labels: {}
-  annotations: {}
-  ownerreferences: []
-  finalizers: []
-  clustername: ""
-  managedfields: []
 spec:
-  secretstoreref:
+  data:
+  - remoteRef:
+      key: /development/dockerhub
+    secretKey: .dockerconfigjson
+  secretStoreRef:
     name: ""
-    kind: ""
   target:
     name: dockerconfig-example
-    creationpolicy: ""
-    template: null
-  refreshinterval: null
-  data:
-  - secretkey: .dockerconfigjson
-    remoteref:
-      key: /development/dockerhub
-      version: ""
-      property: ""
-  datafrom: []
 status:
-  refreshtime: "0001-01-01T00:00:00Z"
-  syncedresourceversion: ""
-  conditions: []
+  refreshTime: null

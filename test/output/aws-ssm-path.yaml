@@ -1,45 +1,19 @@
-typemeta:
-  kind: ""
-  apiversion: ""
-objectmeta:
+apiVersion: external-secrets.io/v1alpha1
+kind: ExternalSecret
+metadata:
+  creationTimestamp: null
   name: aws-ssm-path
-  generatename: ""
-  namespace: ""
-  selflink: ""
-  uid: ""
-  resourceversion: ""
-  generation: 0
-  creationtimestamp: "0001-01-01T00:00:00Z"
-  deletiontimestamp: null
-  deletiongraceperiodseconds: null
-  labels: {}
-  annotations: {}
-  ownerreferences: []
-  finalizers: []
-  clustername: ""
-  managedfields: []
 spec:
-  secretstoreref:
+  data:
+  - remoteRef:
+      key: /foo/name
+    secretKey: fooName
+  - remoteRef:
+      key: ""
+    secretKey: ""
+  secretStoreRef:
     name: ""
-    kind: ""
   target:
     name: aws-ssm-path
-    creationpolicy: ""
-    template: null
-  refreshinterval: null
-  data:
-  - secretkey: fooName
-    remoteref:
-      key: /foo/name
-      version: ""
-      property: ""
-  - secretkey: ""
-    remoteref:
-      key: ""
-      version: ""
-      property: ""
-  datafrom: []
 status:
-  refreshtime: "0001-01-01T00:00:00Z"
-  syncedresourceversion: ""
-  conditions: []
+  refreshTime: null

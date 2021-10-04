@@ -1,45 +1,21 @@
-typemeta:
-  kind: ""
-  apiversion: ""
-objectmeta:
+apiVersion: external-secrets.io/v1alpha1
+kind: ExternalSecret
+metadata:
+  creationTimestamp: null
   name: tls-example
-  generatename: ""
-  namespace: ""
-  selflink: ""
-  uid: ""
-  resourceversion: ""
-  generation: 0
-  creationtimestamp: "0001-01-01T00:00:00Z"
-  deletiontimestamp: null
-  deletiongraceperiodseconds: null
-  labels: {}
-  annotations: {}
-  ownerreferences: []
-  finalizers: []
-  clustername: ""
-  managedfields: []
 spec:
-  secretstoreref:
+  data:
+  - remoteRef:
+      key: /development/certificate
+      property: crt
+    secretKey: tls.crt
+  - remoteRef:
+      key: /development/certificate
+      property: key
+    secretKey: tls.key
+  secretStoreRef:
     name: ""
-    kind: ""
   target:
     name: tls-example
-    creationpolicy: ""
-    template: null
-  refreshinterval: null
-  data:
-  - secretkey: tls.crt
-    remoteref:
-      key: /development/certificate
-      version: ""
-      property: crt
-  - secretkey: tls.key
-    remoteref:
-      key: /development/certificate
-      version: ""
-      property: key
-  datafrom: []
 status:
-  refreshtime: "0001-01-01T00:00:00Z"
-  syncedresourceversion: ""
-  conditions: []
+  refreshTime: null

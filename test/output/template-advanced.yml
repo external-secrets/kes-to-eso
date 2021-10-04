@@ -1,45 +1,19 @@
-typemeta:
-  kind: ""
-  apiversion: ""
-objectmeta:
+apiVersion: external-secrets.io/v1alpha1
+kind: ExternalSecret
+metadata:
+  creationTimestamp: null
   name: template-advanced
-  generatename: ""
-  namespace: ""
-  selflink: ""
-  uid: ""
-  resourceversion: ""
-  generation: 0
-  creationtimestamp: "0001-01-01T00:00:00Z"
-  deletiontimestamp: null
-  deletiongraceperiodseconds: null
-  labels: {}
-  annotations: {}
-  ownerreferences: []
-  finalizers: []
-  clustername: ""
-  managedfields: []
 spec:
-  secretstoreref:
+  data:
+  - remoteRef:
+      key: kv/data/test/secret1
+    secretKey: s1
+  - remoteRef:
+      key: kv/data/test/secret2
+    secretKey: s2
+  secretStoreRef:
     name: ""
-    kind: ""
   target:
     name: template-advanced
-    creationpolicy: ""
-    template: null
-  refreshinterval: null
-  data:
-  - secretkey: s1
-    remoteref:
-      key: kv/data/test/secret1
-      version: ""
-      property: ""
-  - secretkey: s2
-    remoteref:
-      key: kv/data/test/secret2
-      version: ""
-      property: ""
-  datafrom: []
 status:
-  refreshtime: "0001-01-01T00:00:00Z"
-  syncedresourceversion: ""
-  conditions: []
+  refreshTime: null

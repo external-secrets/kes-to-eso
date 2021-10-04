@@ -4,58 +4,143 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
-	"strings"
 
 	api "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
-	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	yaml "sigs.k8s.io/yaml"
 )
 
+var ESOSecretStoreList = make([]api.SecretStore, 0)
+
 type KESExternalSecret struct {
-	Meta       metav1.TypeMeta   `yaml:",inline"`
-	ObjectMeta metav1.ObjectMeta `yaml:"metadata"`
+	Kind       string            `json:"kind,omitempty"`
+	ApiVersion string            `json:"apiVersion,omitempty"`
+	ObjectMeta metav1.ObjectMeta `json:"metadata"`
 	Spec       struct {
 		BackendType     string
 		VaultMountPoint string
 		VaultRole       string
 		KvVersion       int
+		KeyVaultName    string
+		ProjectID       string
 		RoleArn         string
 		Region          string
 		DataFrom        []string
 		Data            []struct {
 			Key          string
 			Name         string
+			SecretType   string `json:"secretType"`
 			Property     string
 			Recursive    string
 			Path         string
 			VersionStage string
 			Version      string
-			IsBinary     bool
-			SecretType   string
+			IsBinary     bool `json:"isBinary"`
 		}
-		Template map[string]interface{}
+		Template api.ExternalSecretTemplate
 	}
 }
 
 func readKES(file string) (KESExternalSecret, error) {
 	dat, err := os.ReadFile(file)
+	if err != nil {
+		return KESExternalSecret{}, err
+	}
 	T := KESExternalSecret{}
-	yaml.Unmarshal(dat, &T)
+	err = yaml.Unmarshal(dat, &T)
 	if err != nil {
 		return KESExternalSecret{}, err
 	}
 	return T, nil
 }
 
+//TODO: Allow future versions here
 func newESOSecret() api.ExternalSecret {
-	return api.ExternalSecret{}
+	d := api.ExternalSecret{}
+	d.TypeMeta = metav1.TypeMeta{
+		Kind:       "ExternalSecret",
+		APIVersion: "external-secrets.io/v1alpha1",
+	}
+	return d
+}
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func randSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
+func newSecretStore() api.SecretStore {
+	d := api.SecretStore{}
+	d.TypeMeta = metav1.TypeMeta{
+		Kind:       "SecretStore",
+		APIVersion: "external-secrets.io/v1alpha1",
+	}
+	d.ObjectMeta.Name = "SS-auto-gen-" + randSeq(8)
+	return d
+}
+func bindProvider(S api.SecretStore, K KESExternalSecret) api.SecretStore {
+	backend := K.Spec.BackendType
+	switch backend {
+	case "secretsManager":
+		p := api.AWSProvider{}
+		p.Service = api.AWSServiceSecretsManager
+		p.Role = K.Spec.RoleArn
+		p.Region = K.Spec.Region
+		provider := api.SecretStoreProvider{}
+		provider.AWS = &p
+		S.Spec.Provider = &provider
+	case "systemManager":
+		p := api.AWSProvider{}
+		p.Service = api.AWSServiceParameterStore
+		provider := api.SecretStoreProvider{}
+		provider.AWS = &p
+		p.Role = K.Spec.RoleArn
+		p.Region = K.Spec.Region
+		S.Spec.Provider = &provider
+	case "azureKeyVault":
+		p := api.AzureKVProvider{}
+		p.VaultURL = &K.Spec.KeyVaultName
+		provider := api.SecretStoreProvider{}
+		provider.AzureKV = &p
+		S.Spec.Provider = &provider
+	case "gcpSecretsManager":
+		p := api.GCPSMProvider{}
+		p.ProjectID = K.Spec.ProjectID
+		provider := api.SecretStoreProvider{}
+		provider.GCPSM = &p
+		S.Spec.Provider = &provider
+	case "ibmcloudSecretsManager":
+
+		provider := api.SecretStoreProvider{}
+		provider.IBM = &api.IBMProvider{}
+		S.Spec.Provider = &provider
+	case "vault": // TODO - Where does vaultRole goes?
+		p := api.VaultProvider{}
+		if K.Spec.KvVersion == 1 {
+			p.Version = api.VaultKVStoreV1
+		} else {
+			p.Version = api.VaultKVStoreV2
+		}
+		p.Path = K.Spec.VaultMountPoint
+		provider := api.SecretStoreProvider{}
+		provider.Vault = &p
+		S.Spec.Provider = &provider
+	default:
+	}
+	return S
 }
 
 func parseGenerals(K KESExternalSecret, E api.ExternalSecret) (api.ExternalSecret, error) {
 	secret := E
-	secret.ObjectMeta = K.ObjectMeta
+	secret.ObjectMeta.Name = K.ObjectMeta.Name
 	secret.Spec.Target.Name = K.ObjectMeta.Name // Inherits default in KES, so we should do the same approach here
 	var refKey string
 	for _, kesSecretData := range K.Spec.Data {
@@ -64,48 +149,48 @@ func parseGenerals(K KESExternalSecret, E api.ExternalSecret) (api.ExternalSecre
 		} else {
 			refKey = kesSecretData.Key
 		}
-		esoRemoteRef := api.ExternalSecretDataRemoteRef{Key: refKey, Property: kesSecretData.Property, Version: kesSecretData.Version}
-		esoSecretData := api.ExternalSecretData{SecretKey: kesSecretData.Name, RemoteRef: esoRemoteRef}
+		esoRemoteRef := api.ExternalSecretDataRemoteRef{
+			Key:      refKey,
+			Property: kesSecretData.Property,
+			Version:  kesSecretData.Version}
+		esoSecretData := api.ExternalSecretData{
+			SecretKey: kesSecretData.Name,
+			RemoteRef: esoRemoteRef}
 		secret.Spec.Data = append(secret.Spec.Data, esoSecretData)
 	}
+	for _, kesSecretDataFrom := range K.Spec.DataFrom {
+		esoDataFrom := api.ExternalSecretDataRemoteRef{
+			Key: kesSecretDataFrom,
+		}
+		secret.Spec.DataFrom = append(secret.Spec.DataFrom, esoDataFrom)
+	}
+	secret.Spec.Target.Template = &K.Spec.Template
 	return secret, nil
 
 }
 
-type NotSupportedProvider struct{}
-
-// Method to parse store specifics information from a KES External Secret
-var ProviderMap = map[string]interface{}{
-	"akeyless":               NotSupportedProvider{},
-	"alicloudSecretsManager": NotSupportedProvider{}, // TODO there is a definition but not foundable by go mod...
-	"secretsManager":         api.AWSProvider{},
-	"systemManager":          api.AWSProvider{},
-	"azureKeyVault":          api.AzureKVProvider{},
-	"gcpSecretsManager":      api.GCPSMProvider{},
-	"ibmcloudSecretsManager": api.IBMProvider{},
-	"vault":                  api.VaultProvider{},
-}
-
-func parseStoreSpecifics(K KESExternalSecret, S api.SecretStore) (store api.SecretStore) {
-	return api.SecretStore{}
-}
-
-func parseClusterStoreSpecifics(K KESExternalSecret, E api.ExternalSecret) (store api.SecretStore) {
-	return api.SecretStore{}
+func linkSecretStore(E api.ExternalSecret, S api.SecretStore) api.ExternalSecret {
+	ext := E
+	ext.Spec.SecretStoreRef.Name = S.ObjectMeta.Name
+	ext.Spec.SecretStoreRef.Kind = "SecretStore"
+	return ext
 }
 
 func isKES(K KESExternalSecret) bool {
-	return K.Meta.Kind == "ExternalSecret"
+	return K.Kind == "ExternalSecret"
+}
+
+func newYaml() {
+	fmt.Println("----------")
 }
 
 // all below are helper function for initial development. They are going to be removed afterwards
 
 // Helper function for initial developments
-func list(path string, info fs.FileInfo, err error) error {
+func do_the_thing(path string, info fs.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("found path %v\n", path)
 	if info.IsDir() {
 		return nil
 	}
@@ -114,28 +199,41 @@ func list(path string, info fs.FileInfo, err error) error {
 		return err
 	}
 	if !isKES(K) {
-		fmt.Printf("%s is not a KES file.\n", path)
 		return nil
 	}
-	E, err := parseGenerals(K, api.ExternalSecret{})
+	E, err := parseGenerals(K, newESOSecret())
 	if err != nil {
 		return err
 	}
-	newpath := strings.Replace(path, "input", "output", 1)
-	file, err := os.Create(newpath)
+	S := newSecretStore()
+	S = bindProvider(S, K)
+	dat, err := yaml.Marshal(S)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	encoder := yaml.NewEncoder(file)
-	encoder.Encode(E)
-	fmt.Printf("File %s converted and available at %s\n", path, newpath)
+	fmt.Println(string(dat))
+	newYaml()
+	E = linkSecretStore(E, S)
+	dat, err = yaml.Marshal(E)
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(dat))
+	newYaml()
+	//	newpath := strings.Replace(path, "input", "output", 1)
+	//	file, err := os.Create(newpath)
+	if err != nil {
+		return err
+	}
+	//	defer file.Close()
+	//	file.Write(dat)
+	//	fmt.Printf("File %s converted and available at %s\n", path, newpath)
 	return nil
 }
 
 // Helper function for initial developments
 func ParseKes(path string) {
-	err := filepath.Walk(path, list)
+	err := filepath.Walk(path, do_the_thing)
 	if err != nil {
 		log.Fatal("Something went wrong!\n%v\n", err)
 		return
@@ -144,5 +242,5 @@ func ParseKes(path string) {
 
 // Helper function for initial developments
 func main() {
-	ParseKes("../test/input")
+	ParseKes("../test/input/")
 }

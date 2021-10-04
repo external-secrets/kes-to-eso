@@ -4,7 +4,8 @@ go 1.17
 
 require (
 	github.com/external-secrets/external-secrets v0.3.5
-	gopkg.in/yaml.v2 v2.4.0
+	k8s.io/apimachinery v0.21.2
+	sigs.k8s.io/yaml v1.2.0
 )
 
 require (
@@ -18,8 +19,8 @@ require (
 	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781 // indirect
 	golang.org/x/text v0.3.6 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/api v0.21.2 // indirect
-	k8s.io/apimachinery v0.21.2 // indirect
 	k8s.io/klog/v2 v2.8.0 // indirect
 	sigs.k8s.io/controller-runtime v0.9.2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.0 // indirect

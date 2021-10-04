@@ -1,45 +1,21 @@
-typemeta:
-  kind: ""
-  apiversion: ""
-objectmeta:
+apiVersion: external-secrets.io/v1alpha1
+kind: ExternalSecret
+metadata:
+  creationTimestamp: null
   name: vault
-  generatename: ""
-  namespace: ""
-  selflink: ""
-  uid: ""
-  resourceversion: ""
-  generation: 0
-  creationtimestamp: "0001-01-01T00:00:00Z"
-  deletiontimestamp: null
-  deletiongraceperiodseconds: null
-  labels: {}
-  annotations: {}
-  ownerreferences: []
-  finalizers: []
-  clustername: ""
-  managedfields: []
 spec:
-  secretstoreref:
+  data:
+  - remoteRef:
+      key: secret/data/hello-service/password
+      property: password
+    secretKey: password
+  - remoteRef:
+      key: secret/data/hello-service/certificates
+      property: cert.p12
+    secretKey: cert.p12
+  secretStoreRef:
     name: ""
-    kind: ""
   target:
     name: vault
-    creationpolicy: ""
-    template: null
-  refreshinterval: null
-  data:
-  - secretkey: password
-    remoteref:
-      key: secret/data/hello-service/password
-      version: ""
-      property: password
-  - secretkey: cert.p12
-    remoteref:
-      key: secret/data/hello-service/certificates
-      version: ""
-      property: cert.p12
-  datafrom: []
 status:
-  refreshtime: "0001-01-01T00:00:00Z"
-  syncedresourceversion: ""
-  conditions: []
+  refreshTime: null
