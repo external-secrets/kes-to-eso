@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"log"
@@ -9,7 +10,17 @@ import (
 	"path/filepath"
 
 	api "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
+	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+
+	//	"k8s.io/client-go/kubernetes"
+	//	"k8s.io/client-go/rest"
+	//	"k8s.io/client-go/tools/clientcmd"
+	//	"k8s.io/client-go/util/homedir"
 	yaml "sigs.k8s.io/yaml"
 )
 
@@ -105,6 +116,7 @@ func bindProvider(S api.SecretStore, K KESExternalSecret) api.SecretStore {
 		p.Role = K.Spec.RoleArn
 		p.Region = K.Spec.Region
 		S.Spec.Provider = &provider
+		S, _ = InstallAWSSecrets(S)
 	case "azureKeyVault":
 		p := api.AzureKVProvider{}
 		p.VaultURL = &K.Spec.KeyVaultName
@@ -117,8 +129,8 @@ func bindProvider(S api.SecretStore, K KESExternalSecret) api.SecretStore {
 		provider := api.SecretStoreProvider{}
 		provider.GCPSM = &p
 		S.Spec.Provider = &provider
+		S, _ = InstallGCPSMfiles(S)
 	case "ibmcloudSecretsManager":
-
 		provider := api.SecretStoreProvider{}
 		provider.IBM = &api.IBMProvider{}
 		S.Spec.Provider = &provider
@@ -238,6 +250,189 @@ func ParseKes(path string) {
 		log.Fatalf("Something went wrong!\n%v\n", err)
 		return
 	}
+}
+
+// Functions for kubernetes application management
+
+func initConfig() (*kubernetes.Clientset, error) {
+	kubeconfig := "/home/gustavo/.kube/config"
+
+	// use the current context in kubeconfig
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// create the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return clientset, nil
+}
+
+type KesDeploymentTarget struct {
+	Namespace           string
+	DeploymentName      string
+	ContainerName       string
+	GCPSecretVolumeName string
+	GCPSecretKey        string
+}
+
+func NewDeploymentTarget() *KesDeploymentTarget {
+	t := KesDeploymentTarget{
+		Namespace:           "default",
+		DeploymentName:      "kubernetes-external-secrets",
+		ContainerName:       "kubernetes-external-secrets",
+		GCPSecretVolumeName: "gcp-creds",
+		GCPSecretKey:        "gcp-creds.json",
+	}
+	return &t
+}
+
+func createOrUpdateSecret(essecret *esmeta.SecretKeySelector, secretValue string) (*corev1.Secret, error) {
+	clientset, err := initConfig()
+	if err != nil {
+		return nil, err
+	}
+	secret, err := clientset.CoreV1().Secrets(*essecret.Namespace).Get(context.TODO(), essecret.Name, metav1.GetOptions{})
+	if errors.IsNotFound(err) {
+		secret = &corev1.Secret{}
+		secret.Name = essecret.Name
+		secret.Namespace = *essecret.Namespace
+		temp := map[string]string{
+			essecret.Key: secretValue,
+		}
+		secret.StringData = temp
+		fmt.Println("createAqui!")
+		secret, err := clientset.CoreV1().Secrets(*essecret.Namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return secret, nil
+	} else if err != nil {
+		return nil, err
+	}
+	temp := map[string]string{
+		essecret.Key: secretValue,
+	}
+	secret.StringData = temp
+	secret, err = clientset.CoreV1().Secrets(*essecret.Namespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return secret, nil
+}
+
+func InstallAWSSecrets(S api.SecretStore) (api.SecretStore, error) {
+	ans := S
+	clientset, err := initConfig()
+	if err != nil {
+		return S, err
+	}
+	target := NewDeploymentTarget() // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
+	if err != nil {
+		return S, err
+	}
+	containers := deployment.Spec.Template.Spec.Containers
+	var accessKeyIdSecretKeyRefKey, accessKeyIdSecretKeyRefName string
+	var secretAccessKeySecretKeyRefKey, secretAccessKeySecretKeyRefName string
+
+	for _, container := range containers {
+		if container.Name == target.ContainerName {
+			containerEnvs := container.Env
+			for _, env := range containerEnvs {
+				if env.Name == "AWS_ACCESS_KEY_ID" {
+					if env.ValueFrom != nil {
+						accessKeyIdSecretKeyRefName = env.ValueFrom.SecretKeyRef.Name
+						accessKeyIdSecretKeyRefKey = env.ValueFrom.SecretKeyRef.Key
+					} else if env.Value != "" {
+						accessKeyIdSecretKeyRefName = "aws-secrets"
+						accessKeyIdSecretKeyRefKey = "access-key-id"
+						keySelector := esmeta.SecretKeySelector{
+							Name:      accessKeyIdSecretKeyRefName,
+							Namespace: &target.Namespace,
+							Key:       accessKeyIdSecretKeyRefKey,
+						}
+						fmt.Println("Aqui!")
+						_, err := createOrUpdateSecret(&keySelector, env.Value)
+						if err != nil {
+							panic(err)
+						}
+						fmt.Println("Aqui!2")
+					}
+				}
+				if env.Name == "AWS_SECRET_ACCESS_KEY" {
+					if env.ValueFrom != nil {
+						secretAccessKeySecretKeyRefName = env.ValueFrom.SecretKeyRef.Name
+						secretAccessKeySecretKeyRefKey = env.ValueFrom.SecretKeyRef.Key
+					} else if env.Value != "" {
+						secretAccessKeySecretKeyRefName = "aws-secrets"
+						secretAccessKeySecretKeyRefKey = "secret-access-key"
+						secretSelector := esmeta.SecretKeySelector{
+							Name:      secretAccessKeySecretKeyRefName,
+							Namespace: &target.Namespace,
+							Key:       secretAccessKeySecretKeyRefKey,
+						}
+						_, err := createOrUpdateSecret(&secretSelector, env.Value)
+						if err != nil {
+							panic(err)
+						}
+					}
+				}
+				if accessKeyIdSecretKeyRefName != "" && secretAccessKeySecretKeyRefName != "" {
+					break
+				}
+			}
+			break
+		}
+	}
+	awsSecretRef := api.AWSAuthSecretRef{
+		AccessKeyID: esmeta.SecretKeySelector{
+			Name:      accessKeyIdSecretKeyRefName,
+			Key:       accessKeyIdSecretKeyRefKey,
+			Namespace: &target.Namespace,
+		},
+		SecretAccessKey: esmeta.SecretKeySelector{
+			Name:      secretAccessKeySecretKeyRefName,
+			Key:       secretAccessKeySecretKeyRefKey,
+			Namespace: &target.Namespace,
+		},
+	}
+	ans.Spec.Provider.AWS.Auth.SecretRef = &awsSecretRef
+	return ans, nil
+}
+
+func InstallAWSServiceAccounts(S api.SecretStore) (api.SecretStore, error) {
+	return S, nil
+}
+
+func InstallVaultEnvs(S api.SecretStore) (api.SecretStore, error) {
+	return S, nil
+}
+
+func InstallGCPSMfiles(S api.SecretStore) (api.SecretStore, error) {
+	ans := S
+	clientset, err := initConfig()
+	if err != nil {
+		return S, err
+	}
+	target := NewDeploymentTarget() // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
+	if err != nil {
+		return S, err
+	}
+	volumes := deployment.Spec.Template.Spec.Volumes
+	for _, volume := range volumes {
+		if volume.Name == target.GCPSecretVolumeName {
+			secretName := volume.Secret.SecretName
+			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Name = secretName
+			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Key = target.GCPSecretKey
+			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Namespace = &target.Namespace
+		}
+	}
+	return ans, nil
 }
 
 // Helper function for initial developments
