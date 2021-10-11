@@ -17,7 +17,12 @@ spec:
       containers:
       - name: kubernetes-external-secrets
         image: nginx
+        volumeMounts:
+                - mountPath: /path/to
+                  name: gcp-creds
         env:
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /path/to/gcp-creds.json
         - name: IBM_CLOUD_SECRETS_MANAGER_API_ENDPOINT
           valueFrom:
                   secretKeyRef:
@@ -50,7 +55,7 @@ spec:
                    name: azure-existing-secrets
                    key: tenant-id
         - name: AZURE_CLIENT_ID
-          valueFrom: 
+          valueFrom:
            secretKeyRef:
                    name: azure-existing-secrets
                    key: client-id

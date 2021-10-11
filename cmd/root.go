@@ -24,7 +24,7 @@ to quickly create a Cobra application.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
-		parser.ParseKes("/home/gustavo/Documents/container-solutions/internal/kestoeso/test/input/vault.yml")
+		parser.ParseKes("/home/gustavo/Documents/container-solutions/internal/kestoeso/test/input/gcp-secrets-manager.yml")
 	},
 }
 
@@ -43,11 +43,11 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kes-to-eso.yaml)")
 	rootCmd.PersistentFlags().String("aws-secret", "", "AWS Secret storing access key id and secret access key")
-	rootCmd.PersistentFlags().String("input", "", "path to lookup for KES yamls")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	//	rootCmd.PersistentFlags().StringP("input", "-i", "", "path to lookup for KES yamls")
+	//	rootCmd.PersistentFlags().StringP("output", "-o", "./", "path ot save ESO-generated yamls")
+	//	rootCmd.PersistentFlags().String("kes-deployment-name", "kubernetes-external-secrets", "name of KES deployment object")
+	//	rootCmd.PersistentFlags().String("kes-container-name", "kubernetes-external-secrets", "name of KES container object")
+	//	rootCmd.PersistentFlags().String("kes-namespace", "default", "namespace where KES is installed")
 }
 
 // initConfig reads in config file and ENV variables if set.

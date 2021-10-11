@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 
 	api "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
@@ -16,10 +17,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	//	"k8s.io/client-go/util/homedir"
 	//	"k8s.io/client-go/kubernetes"
 	//	"k8s.io/client-go/rest"
 	//	"k8s.io/client-go/tools/clientcmd"
-	//	"k8s.io/client-go/util/homedir"
 	yaml "sigs.k8s.io/yaml"
 )
 
@@ -292,11 +293,9 @@ type KesDeploymentTarget struct {
 
 func NewDeploymentTarget() *KesDeploymentTarget {
 	t := KesDeploymentTarget{
-		Namespace:           "default",
-		DeploymentName:      "kubernetes-external-secrets",
-		ContainerName:       "kubernetes-external-secrets",
-		GCPSecretVolumeName: "gcp-creds",
-		GCPSecretKey:        "gcp-creds.json",
+		Namespace:      "default",
+		DeploymentName: "kubernetes-external-secrets",
+		ContainerName:  "kubernetes-external-secrets",
 	}
 	return &t
 }
@@ -503,12 +502,40 @@ func InstallGCPSMSecrets(S api.SecretStore) (api.SecretStore, error) {
 	if err != nil {
 		return S, err
 	}
+	containers := deployment.Spec.Template.Spec.Containers
+	volumeName := ""
+	keyName := ""
+	for _, container := range containers {
+		if container.Name == target.ContainerName {
+			mountPath := ""
+			containerEnvs := container.Env
+			for _, env := range containerEnvs {
+				if env.Name == "GOOGLE_APPLICATION_CREDENTIALS" {
+					mountPathSlice := strings.Split(env.Value, "/")
+					for idx, path := range mountPathSlice {
+						if idx == 0 {
+							mountPath = path
+						} else if idx < len(mountPathSlice)-1 {
+							mountPath = mountPath + "/" + path
+						}
+					}
+					keyName = mountPathSlice[len(mountPathSlice)-1]
+				}
+			}
+			volumeMounts := container.VolumeMounts
+			for _, mount := range volumeMounts {
+				if mount.MountPath == mountPath {
+					volumeName = mount.Name
+				}
+			}
+		}
+	}
 	volumes := deployment.Spec.Template.Spec.Volumes
 	for _, volume := range volumes {
-		if volume.Name == target.GCPSecretVolumeName {
+		if volume.Name == volumeName {
 			secretName := volume.Secret.SecretName
 			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Name = secretName
-			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Key = target.GCPSecretKey
+			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Key = keyName
 			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Namespace = &target.Namespace
 		}
 	}
