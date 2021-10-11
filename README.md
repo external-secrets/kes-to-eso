@@ -27,3 +27,15 @@ Although these are the main goals, an MVP approach of migrating YAMLs only might
 ### 0.4.0
 * Handle Blue/Green Deployment
 * Validate new ESO behavior
+
+
+
+### TODOS
+
+* Use Interface / Struct pattern for defining Provider Specific Methods
+* Use Switch Case for swiping env vars
+* Reduce code duplication with helper functions
+* Separate Kubernetes functions in a given package
+* Separate Provider Specific functions in their own packages
+* Unit Tests
+* Make Slice/Map of generated stores so we can reuse them instead of always creating a new one

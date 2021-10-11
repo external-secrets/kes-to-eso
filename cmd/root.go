@@ -24,7 +24,7 @@ to quickly create a Cobra application.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
-		parser.ParseKes("/home/gustavo/Documents/container-solutions/internal/kestoeso/test/input")
+		parser.ParseKes("/home/gustavo/Documents/container-solutions/internal/kestoeso/test/input/vault.yml")
 	},
 }
 

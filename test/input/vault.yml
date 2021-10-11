@@ -4,8 +4,6 @@ metadata:
   name: vault
 spec:
   backendType: vault
-  vaultMountPoint: my-kubernetes-vault-mount-point
-  vaultRole: my-vault-role
   kvVersion: 2 # defaults to 2
   data:
     - name: password
