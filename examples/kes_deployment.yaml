@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubernetes-external-secrets
+  namespace: default
+spec:  
+  selector:
+    matchLabels:
+      app: kubernetes-external-secrets
+  replicas: 1
+  template:
+    metadata:
+     creationTimestamp: null
+     labels:
+      app: kubernetes-external-secrets
+    spec:
+      containers:
+      - name: kubernetes-external-secrets
+        image: nginx
+        env:
+        - name: IBM_CLOUD_SECRETS_MANAGER_API_ENDPOINT
+          valueFrom:
+                  secretKeyRef:
+                          name: ibm-existing-secrets
+                          key: api-endpoint
+        - name: IBM_CLOUD_SECRETS_MANAGER_API_APIKEY
+          valueFrom:
+                  secretKeyRef:
+                          name: ibm-existing-secrets
+                          key: api-key
+        - name: VAULT_ADDR
+          value: https://an.endpoint:8200
+        - name: DEFAULT_VAULT_MOUNT_POINT
+          valueFrom:
+                  secretKeyRef:
+                          name: vault-existing-secrets
+                          key: mountpoint
+        - name: DEFAULT_VAULT_ROLE
+          valueFrom:
+                  secretKeyRef:
+                          name: vault-existing-secrets
+                          key: role
+        - name: AWS_ACCESS_KEY_ID
+          value: asdfghj123456
+        - name: AWS_SECRET_ACCESS_KEY
+          value: 1230918293081asdoiaisdioausydua098s7d0a9
+        - name: AZURE_TENANT_ID
+          valueFrom : 
+           secretKeyRef:
+                   name: azure-existing-secrets
+                   key: tenant-id
+        - name: AZURE_CLIENT_ID
+          valueFrom: 
+           secretKeyRef:
+                   name: azure-existing-secrets
+                   key: client-id
+        - name: AZURE_CLIENT_SECRET
+          valueFrom: 
+           secretKeyRef:
+                   name: azure-existing-secrets
+                   key: client-secret
+        name: kubernetes-external-secrets
+      volumes:
+      - name: gcp-creds
+        secret:
+          defaultMode: 420
+          secretName: gcp-secret
