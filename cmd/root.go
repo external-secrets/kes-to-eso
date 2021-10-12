@@ -28,10 +28,9 @@ Examples:
 		opt.ContainerName, _ = cmd.Flags().GetString("kes-container-name")
 		opt.DeploymentName, _ = cmd.Flags().GetString("kes-deployment-name")
 		opt.Namespace, _ = cmd.Flags().GetString("kes-namespace")
-		opt.ClusterStore, _ = cmd.Flags().GetBool("to-stdout")
-		opt.ToStdout, _ = cmd.Flags().GetBool("cluster-store")
+		opt.ClusterStore, _ = cmd.Flags().GetBool("cluster-store")
+		opt.ToStdout, _ = cmd.Flags().GetBool("to-stdout")
 		opt.InputPath, _ = cmd.Flags().GetString("input")
-		fmt.Println(opt)
 		_, err := os.Stat(opt.InputPath)
 		if err != nil {
 			fmt.Println("Missing input path!")
@@ -42,12 +41,15 @@ Examples:
 		fileinfo, err := os.Stat(opt.OutputPath)
 		if !opt.ToStdout {
 			if err != nil {
+				fmt.Println("Output Path is not a path (to-stdout = false)")
 				cmd.Help()
 				os.Exit(1)
 			} else if fileinfo == nil {
+				fmt.Println("Could not find path for output (to-stdout = false)")
 				cmd.Help()
 				os.Exit(1)
 			} else if !fileinfo.IsDir() {
+				fmt.Println("output path is not a directory (to-stdout = false)")
 				cmd.Help()
 				os.Exit(1)
 			}
@@ -71,7 +73,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().Bool("to-stdout", true, "print generated yamls to STDOUT")
+	rootCmd.PersistentFlags().Bool("to-stdout", false, "print generated yamls to STDOUT")
 	rootCmd.PersistentFlags().Bool("cluster-store", false, "create cluster stores over simple stores")
 	rootCmd.PersistentFlags().StringP("input", "i", "", "path to lookup for KES yamls")
 	rootCmd.PersistentFlags().StringP("output", "o", "", "path ot save ESO-generated yamls")

@@ -229,9 +229,6 @@ func newYaml() {
 	fmt.Println("----------")
 }
 
-// all below are helper function for initial development. They are going to be removed afterwards
-
-// Helper function for initial developments
 func ParseKes(opt *KesToEsoOptions) {
 	var files []string
 	filepath.Walk(opt.InputPath, func(path string, info os.FileInfo, err error) error {
@@ -348,7 +345,7 @@ func InstallAWSSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore
 	if err != nil {
 		return S, err
 	}
-	target := *opt // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	target := *opt
 	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
@@ -431,7 +428,7 @@ func InstallVaultSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretSto
 	if err != nil {
 		return S, err
 	}
-	target := *opt // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	target := *opt
 	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
@@ -498,7 +495,7 @@ func InstallGCPSMSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretSto
 	if err != nil {
 		return S, err
 	}
-	target := *opt // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	target := *opt
 	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
@@ -551,7 +548,7 @@ func InstallAzureKVSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretS
 	if err != nil {
 		return S, err
 	}
-	target := *opt // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	target := *opt
 	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
@@ -641,7 +638,7 @@ func InstallIBMSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore
 	if err != nil {
 		return S, err
 	}
-	target := *opt // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	target := *opt
 	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
