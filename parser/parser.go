@@ -3,8 +3,6 @@ package parser
 import (
 	"context"
 	"fmt"
-	"io/fs"
-	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -78,7 +76,7 @@ func newESOSecret() api.ExternalSecret {
 	return d
 }
 
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+var letters = []rune("abcdefghijklmnopqrstuvwxyz")
 
 func randSeq(n int) string {
 	b := make([]rune, n)
@@ -88,15 +86,19 @@ func randSeq(n int) string {
 	return string(b)
 }
 
-func newSecretStore() api.SecretStore {
+func newSecretStore(clusterStore bool) api.SecretStore {
 	d := api.SecretStore{}
 	d.TypeMeta = metav1.TypeMeta{
-		Kind:       "SecretStore",
 		APIVersion: "external-secrets.io/v1alpha1",
+	}
+	if clusterStore {
+		d.TypeMeta.Kind = "ClusterSecretStore"
+	} else {
+		d.TypeMeta.Kind = "SecretStore"
 	}
 	return d
 }
-func bindProvider(S api.SecretStore, K KESExternalSecret) api.SecretStore {
+func bindProvider(S api.SecretStore, K KESExternalSecret, opt *KesToEsoOptions) api.SecretStore {
 	backend := K.Spec.BackendType
 	switch backend {
 	case "secretsManager":
@@ -108,7 +110,7 @@ func bindProvider(S api.SecretStore, K KESExternalSecret) api.SecretStore {
 		provider.AWS = &p
 		S.Spec.Provider = &provider
 		S.ObjectMeta.Name = "aws-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallAWSSecrets(S)
+		S, _ = InstallAWSSecrets(S, opt)
 	case "systemManager":
 		p := api.AWSProvider{}
 		p.Service = api.AWSServiceParameterStore
@@ -118,14 +120,14 @@ func bindProvider(S api.SecretStore, K KESExternalSecret) api.SecretStore {
 		p.Region = K.Spec.Region
 		S.Spec.Provider = &provider
 		S.ObjectMeta.Name = "aws-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallAWSSecrets(S)
+		S, _ = InstallAWSSecrets(S, opt)
 	case "azureKeyVault": // TODO RECHECK MAPPING ON REAL USE CASE. WHAT KEYVAULTNAME IS USED FOR?
 		p := api.AzureKVProvider{}
 		provider := api.SecretStoreProvider{}
 		provider.AzureKV = &p
 		S.Spec.Provider = &provider
 		S.ObjectMeta.Name = "azurekv-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallAzureKVSecrets(S)
+		S, _ = InstallAzureKVSecrets(S, opt)
 	case "gcpSecretsManager":
 		p := api.GCPSMProvider{}
 		p.ProjectID = K.Spec.ProjectID
@@ -133,13 +135,13 @@ func bindProvider(S api.SecretStore, K KESExternalSecret) api.SecretStore {
 		provider.GCPSM = &p
 		S.Spec.Provider = &provider
 		S.ObjectMeta.Name = "gcp-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallGCPSMSecrets(S)
+		S, _ = InstallGCPSMSecrets(S, opt)
 	case "ibmcloudSecretsManager":
 		provider := api.SecretStoreProvider{}
 		provider.IBM = &api.IBMProvider{}
 		S.Spec.Provider = &provider
 		S.ObjectMeta.Name = "ibm-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallIBMSecrets(S)
+		S, _ = InstallIBMSecrets(S, opt)
 	case "vault": // TODO RECHECK MAPPING ON REAL USE CASE
 		p := api.VaultProvider{}
 		if K.Spec.KvVersion == 1 {
@@ -151,20 +153,34 @@ func bindProvider(S api.SecretStore, K KESExternalSecret) api.SecretStore {
 		provider.Vault = &p
 		S.Spec.Provider = &provider
 		S.ObjectMeta.Name = "vault-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallVaultSecrets(S)
-		fmt.Println(S)
+		S, _ = InstallVaultSecrets(S, opt)
 		if K.Spec.VaultMountPoint != "" {
 			S.Spec.Provider.Vault.Auth.Kubernetes.Path = K.Spec.VaultMountPoint
 		}
 		if K.Spec.VaultRole != "" {
 			S.Spec.Provider.Vault.Auth.Kubernetes.Role = K.Spec.VaultRole
 		}
-		fmt.Println(S)
 	case "alicloud": // TODO DEVELOP
 	case "akeyless": // TODO DEVELOP
 	default:
 	}
 	return S
+}
+func writeYaml(S interface{}, filepath string, to_stdout bool) error {
+	dat, err := yaml.Marshal(S)
+	if err != nil {
+		return err
+	}
+	if to_stdout {
+		fmt.Println(string(dat))
+		newYaml()
+	} else {
+		err = os.WriteFile(filepath, dat, 0644)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func parseGenerals(K KESExternalSecret, E api.ExternalSecret) (api.ExternalSecret, error) {
@@ -201,7 +217,7 @@ func parseGenerals(K KESExternalSecret, E api.ExternalSecret) (api.ExternalSecre
 func linkSecretStore(E api.ExternalSecret, S api.SecretStore) api.ExternalSecret {
 	ext := E
 	ext.Spec.SecretStoreRef.Name = S.ObjectMeta.Name
-	ext.Spec.SecretStoreRef.Kind = "SecretStore"
+	ext.Spec.SecretStoreRef.Kind = S.TypeMeta.Kind
 	return ext
 }
 
@@ -216,51 +232,39 @@ func newYaml() {
 // all below are helper function for initial development. They are going to be removed afterwards
 
 // Helper function for initial developments
-func do_the_thing(path string, info fs.FileInfo, err error) error {
-	if err != nil {
-		return err
-	}
-	if info.IsDir() {
+func ParseKes(opt *KesToEsoOptions) {
+	var files []string
+	filepath.Walk(opt.InputPath, func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			files = append(files, path)
+		}
 		return nil
-	}
-	K, err := readKES(path)
-	if err != nil {
-		return err
-	}
-	if !isKES(K) {
-		return nil
-	}
-	E, err := parseGenerals(K, newESOSecret())
-	if err != nil {
-		return err
-	}
-	S := newSecretStore()
-	S = bindProvider(S, K)
-	dat, err := yaml.Marshal(S)
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(dat))
-	newYaml()
-	E = linkSecretStore(E, S)
-	dat, err = yaml.Marshal(E)
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(dat))
-	newYaml()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// Helper function for initial developments
-func ParseKes(path string) {
-	err := filepath.Walk(path, do_the_thing)
-	if err != nil {
-		log.Fatalf("Something went wrong!\n%v\n", err)
-		return
+	})
+	for _, file := range files {
+		K, err := readKES(file)
+		if err != nil {
+			panic(err)
+		}
+		if !isKES(K) {
+			fmt.Printf("%v is not a KES file!", file)
+		}
+		E, err := parseGenerals(K, newESOSecret())
+		if err != nil {
+			panic(err)
+		}
+		S := newSecretStore(opt.ClusterStore)
+		S = bindProvider(S, K, opt)
+		store_filename := fmt.Sprintf("%v/secret-store-%v.yaml", opt.OutputPath, S.ObjectMeta.Name)
+		secret_filename := fmt.Sprintf("%v/external-secret-%v.yaml", opt.OutputPath, E.ObjectMeta.Name)
+		err = writeYaml(S, store_filename, opt.ToStdout)
+		if err != nil {
+			panic(err)
+		}
+		E = linkSecretStore(E, S)
+		err = writeYaml(E, secret_filename, opt.ToStdout)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -283,19 +287,25 @@ func initConfig() (*kubernetes.Clientset, error) {
 	return clientset, nil
 }
 
-type KesDeploymentTarget struct {
-	Namespace           string
-	DeploymentName      string
-	ContainerName       string
-	GCPSecretVolumeName string
-	GCPSecretKey        string
+type KesToEsoOptions struct {
+	Namespace      string
+	DeploymentName string
+	ContainerName  string
+	InputPath      string
+	OutputPath     string
+	ToStdout       bool
+	ClusterStore   bool
 }
 
-func NewDeploymentTarget() *KesDeploymentTarget {
-	t := KesDeploymentTarget{
+func NewDeploymentTarget() *KesToEsoOptions {
+	t := KesToEsoOptions{
 		Namespace:      "default",
 		DeploymentName: "kubernetes-external-secrets",
 		ContainerName:  "kubernetes-external-secrets",
+		InputPath:      "",
+		OutputPath:     "",
+		ToStdout:       true,
+		ClusterStore:   true,
 	}
 	return &t
 }
@@ -309,7 +319,6 @@ func getSecretValue(name string, key string, namespace string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Printf("Context: %v/secrets/%v/%v\n", namespace, name, key)
 	value := secret.Data[key]
 	return string(value), nil
 }
@@ -333,13 +342,13 @@ func updateOrCreateSecret(secret *corev1.Secret, essecret *esmeta.SecretKeySelec
 
 // Provider functions to install Context on a given secret store.
 
-func InstallAWSSecrets(S api.SecretStore) (api.SecretStore, error) {
+func InstallAWSSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore, error) {
 	ans := S
 	clientset, err := initConfig()
 	if err != nil {
 		return S, err
 	}
-	target := NewDeploymentTarget() // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	target := *opt // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
 	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
@@ -409,24 +418,20 @@ func InstallAWSSecrets(S api.SecretStore) (api.SecretStore, error) {
 	}
 	ans.Spec.Provider.AWS.Auth.SecretRef = &awsSecretRef
 	if newsecret != nil {
-		dat, err := yaml.Marshal(newsecret)
-		if err != nil {
-			return S, err
-		}
-		fmt.Println(string(dat))
-		newYaml()
+		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
+		writeYaml(newsecret, secret_filename, target.ToStdout)
 	}
 	return ans, nil
 }
 
-func InstallVaultSecrets(S api.SecretStore) (api.SecretStore, error) {
+func InstallVaultSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore, error) {
 	ans := S
 	authRef := api.VaultKubernetesAuth{}
 	clientset, err := initConfig()
 	if err != nil {
 		return S, err
 	}
-	target := NewDeploymentTarget() // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	target := *opt // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
 	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
@@ -481,27 +486,24 @@ func InstallVaultSecrets(S api.SecretStore) (api.SecretStore, error) {
 	}
 	ans.Spec.Provider.Vault.Auth.Kubernetes = &authRef
 	if newsecret != nil {
-		dat, err := yaml.Marshal(newsecret)
-		if err != nil {
-			return S, err
-		}
-		fmt.Println(string(dat))
-		newYaml()
+		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
+		writeYaml(newsecret, secret_filename, target.ToStdout)
 	}
 	return ans, nil
 }
 
-func InstallGCPSMSecrets(S api.SecretStore) (api.SecretStore, error) {
+func InstallGCPSMSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore, error) {
 	ans := S
 	clientset, err := initConfig()
 	if err != nil {
 		return S, err
 	}
-	target := NewDeploymentTarget() // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	target := *opt // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
 	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
 	}
+	fmt.Println("Found kes deployment!")
 	containers := deployment.Spec.Template.Spec.Containers
 	volumeName := ""
 	keyName := ""
@@ -542,14 +544,14 @@ func InstallGCPSMSecrets(S api.SecretStore) (api.SecretStore, error) {
 	return ans, nil
 }
 
-func InstallAzureKVSecrets(S api.SecretStore) (api.SecretStore, error) {
+func InstallAzureKVSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore, error) {
 	ans := S
 	authRef := api.AzureKVAuth{}
 	clientset, err := initConfig()
 	if err != nil {
 		return S, err
 	}
-	target := NewDeploymentTarget() // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	target := *opt // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
 	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
@@ -626,24 +628,20 @@ func InstallAzureKVSecrets(S api.SecretStore) (api.SecretStore, error) {
 	}
 	ans.Spec.Provider.AzureKV.AuthSecretRef = &authRef
 	if newsecret != nil {
-		dat, err := yaml.Marshal(newsecret)
-		if err != nil {
-			return S, err
-		}
-		fmt.Println(string(dat))
-		newYaml()
+		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
+		writeYaml(newsecret, secret_filename, target.ToStdout)
 	}
 	return ans, nil
 }
 
-func InstallIBMSecrets(S api.SecretStore) (api.SecretStore, error) {
+func InstallIBMSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore, error) {
 	ans := S
 	authRef := api.IBMAuth{}
 	clientset, err := initConfig()
 	if err != nil {
 		return S, err
 	}
-	target := NewDeploymentTarget() // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
+	target := *opt // TODO - configure Deployment Target out of here, and use it like a big target configurable by CLI.
 	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
@@ -699,12 +697,8 @@ func InstallIBMSecrets(S api.SecretStore) (api.SecretStore, error) {
 	}
 	ans.Spec.Provider.IBM.Auth = authRef
 	if newsecret != nil {
-		dat, err := yaml.Marshal(newsecret)
-		if err != nil {
-			return S, err
-		}
-		fmt.Println(string(dat))
-		newYaml()
+		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
+		writeYaml(newsecret, secret_filename, target.ToStdout)
 	}
 	return ans, nil
 
