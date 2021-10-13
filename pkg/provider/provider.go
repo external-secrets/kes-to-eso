@@ -106,7 +106,16 @@ func InstallAWSSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 		utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
 	}
 	if awsSecretRef.AccessKeyID.Name == "" || awsSecretRef.SecretAccessKey.Name == "" {
-		return S, errors.New("could not find aws credential information on kes deployment")
+		saSelector := esmeta.ServiceAccountSelector{
+			Namespace: &target.Namespace,
+			Name:      deployment.Spec.Template.Spec.ServiceAccountName,
+		}
+		_, err := utils.GetServiceAccountIfAnnotationExists("eks.amazonaws.com/role-arn", &saSelector) // Later On with --copy-secret-auths we can use SA to change namespaces and apply
+		if err != nil {
+			return S, errors.New("could not find aws credential information (secrets or sa with role-arn annotation) on kes deployment")
+		}
+		JWTAuth := api.AWSJWTAuth{ServiceAccountRef: &saSelector}
+		ans.Spec.Provider.AWS.Auth.JWTAuth = &JWTAuth
 	}
 	return ans, nil
 }
@@ -173,7 +182,7 @@ func InstallVaultSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secr
 	}
 	ans.Spec.Provider.Vault.Auth.Kubernetes = &authRef
 	if newsecret.ObjectMeta.Name != "" {
-		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
+		secret_filename := fmt.Sprintf("%v/secret-vault-provider-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
 		utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
 	}
 	if authRef.Role == "" || authRef.Path == "" || ans.Spec.Provider.Vault.Server == "" {
@@ -331,7 +340,7 @@ func InstallAzureKVSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Se
 	}
 	ans.Spec.Provider.AzureKV.AuthSecretRef = &authRef
 	if newsecret.ObjectMeta.Name != "" {
-		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
+		secret_filename := fmt.Sprintf("%v/secret-azure-provider-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
 		utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
 	}
 	if authRef.ClientID == nil || authRef.ClientSecret == nil {
@@ -407,7 +416,7 @@ func InstallIBMSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 	}
 	ans.Spec.Provider.IBM.Auth = authRef
 	if newsecret.ObjectMeta.Name != "" {
-		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
+		secret_filename := fmt.Sprintf("%v/secret-ibm-provider-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
 		utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
 	}
 	if authRef.SecretRef.SecretAPIKey.Name == "" {
