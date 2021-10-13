@@ -2,8 +2,9 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"kestoeso/apis"
+	"kestoeso/pkg/apis"
 	"os"
 
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
@@ -51,6 +52,23 @@ func GetSecretValue(name string, key string, namespace string) (string, error) {
 	}
 	value := secret.Data[key]
 	return string(value), nil
+}
+
+func GetServiceAccountIfAnnotationExists(key string, sa *esmeta.ServiceAccountSelector) (*corev1.ServiceAccount, error) {
+	clientset, err := InitKubeConfig()
+	if err != nil {
+		return nil, err
+	}
+	s, err := clientset.CoreV1().ServiceAccounts(*sa.Namespace).Get(context.TODO(), sa.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	_, found := s.Annotations[key]
+	if found {
+		return s, nil
+	} else {
+		return nil, errors.New("annotation key absent in service account")
+	}
 }
 
 func UpdateOrCreateSecret(secret *corev1.Secret, essecret *esmeta.SecretKeySelector, secretValue string) (*corev1.Secret, error) {

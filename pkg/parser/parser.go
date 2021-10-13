@@ -2,9 +2,9 @@ package parser
 
 import (
 	"fmt"
-	"kestoeso/apis"
-	"kestoeso/provider"
-	"kestoeso/utils"
+	"kestoeso/pkg/apis"
+	"kestoeso/pkg/provider"
+	"kestoeso/pkg/utils"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -32,7 +32,13 @@ type StoreDB interface {
 
 func (storedb SecretStoreDB) Exists(S api.SecretStore) (bool, int) {
 	for idx, secretStore := range storedb {
-		if secretStore.Namespace == S.Namespace &&
+		if S.Kind == "SecretStore" &&
+			secretStore.Namespace == S.Namespace &&
+			secretStore.APIVersion == S.APIVersion &&
+			secretStore.Kind == S.Kind &&
+			reflect.DeepEqual(secretStore.Spec, S.Spec) {
+			return true, idx
+		} else if S.Kind == "ClusterSecretStore" &&
 			secretStore.APIVersion == S.APIVersion &&
 			secretStore.Kind == S.Kind &&
 			reflect.DeepEqual(secretStore.Spec, S.Spec) {
@@ -111,7 +117,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, opt *apis.KesToEs
 		S.Spec.Provider = &prov
 		S, err = provider.InstallAWSSecrets(S, opt)
 		if err != nil {
-			log.Warnf("Failed to Install AWS Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
+			log.Warnf("Failed to Install AWS Backend Specific configuration: %v. Make sure you have set up Controller Pod Identity or manually edit SecretStore before applying it", err)
 		}
 	case "systemManager":
 		p := api.AWSProvider{}
@@ -123,7 +129,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, opt *apis.KesToEs
 		S.Spec.Provider = &prov
 		S, err = provider.InstallAWSSecrets(S, opt)
 		if err != nil {
-			log.Warnf("Failed to Install AWS Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
+			log.Warnf("Failed to Install AWS Backend Specific configuration: %v. Make sure you have set up Controller Pod Identity Manually Edit SecretStore before applying it", err)
 		}
 	case "azureKeyVault": // TODO RECHECK MAPPING ON REAL USE CASE. WHAT KEYVAULTNAME IS USED FOR?
 		p := api.AzureKVProvider{}
@@ -142,7 +148,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, opt *apis.KesToEs
 		S.Spec.Provider = &prov
 		S, err = provider.InstallGCPSMSecrets(S, opt)
 		if err != nil {
-			log.Warnf("Failed to Install GCP Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
+			log.Warnf("Failed to Install GCP Backend Specific configuration: %v. Makesure you have set up workload identity or manually edit SecretStore before applying it", err)
 		}
 	case "ibmcloudSecretsManager":
 		prov := api.SecretStoreProvider{}

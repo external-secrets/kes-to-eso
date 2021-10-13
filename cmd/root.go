@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"kestoeso/apis"
-	"kestoeso/parser"
+	"kestoeso/pkg/apis"
+	"kestoeso/pkg/parser"
 	"os"
 
 	log "github.com/sirupsen/logrus"
@@ -88,8 +88,8 @@ func init() {
 	rootCmd.PersistentFlags().StringP("output", "o", "", "path ot save ESO-generated yamls")
 	rootCmd.PersistentFlags().String("kes-deployment-name", "kubernetes-external-secrets", "name of KES deployment object")
 	rootCmd.PersistentFlags().String("kes-container-name", "kubernetes-external-secrets", "name of KES container object")
-	rootCmd.PersistentFlags().String("kes-namespace", "default", "namespace where KES is installed")
-	rootCmd.PersistentFlags().String("target-namespace", "", "namespace to install files (override KES definitions)")
+	rootCmd.PersistentFlags().StringP("kes-namespace", "n", "default", "namespace where KES is installed")
+	rootCmd.PersistentFlags().String("target-namespace", "", "namespace to install files (not recommended - overrides KES-ExternalSecrets definitions)")
 }
 
 // initConfig reads in config file and ENV variables if set.

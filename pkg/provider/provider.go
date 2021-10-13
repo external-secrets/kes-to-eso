@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"kestoeso/apis"
-	"kestoeso/utils"
-	"reflect"
+	"kestoeso/pkg/apis"
+	"kestoeso/pkg/utils"
 	"strings"
 
 	api "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
@@ -222,18 +221,21 @@ func InstallGCPSMSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secr
 			}
 		}
 	}
+	var secretName string
 	volumes := deployment.Spec.Template.Spec.Volumes
 	for _, volume := range volumes {
 		if volume.Name == volumeName {
-			secretName := volume.Secret.SecretName
+			secretName = volume.Secret.SecretName
 			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Name = secretName
 			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Key = keyName
 			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Namespace = &target.Namespace
 		}
 	}
-	if reflect.DeepEqual(ans, S) {
+	if secretName == "" || keyName == "" {
 		return ans, errors.New("credentials for gcp sm not found in kes deployment")
 	}
+	// if reflect.DeepEqual(ans, S) {
+	// }
 	return ans, nil
 }
 
