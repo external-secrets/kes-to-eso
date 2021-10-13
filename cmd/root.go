@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"kestoeso/apis"
 	"kestoeso/parser"
 	"os"
 
@@ -26,7 +27,7 @@ Examples:
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
 		log.SetOutput(os.Stderr)
-		opt := parser.NewDeploymentTarget()
+		opt := apis.NewOptions()
 		opt.ContainerName, _ = cmd.Flags().GetString("kes-container-name")
 		opt.DeploymentName, _ = cmd.Flags().GetString("kes-deployment-name")
 		opt.Namespace, _ = cmd.Flags().GetString("kes-namespace")
@@ -62,7 +63,7 @@ Examples:
 		if opt.SecretStore && !opt.CopySecretRefs {
 			log.Warnf("Warning! Backend Secret References are not being copied to the secret store namespaces! This could lead to unintended behavior (--secret-store=true --copy-secret-refs=false)")
 		}
-		parser.ParseKes(opt)
+		parser.Root(opt)
 		os.Exit(0)
 	},
 }
