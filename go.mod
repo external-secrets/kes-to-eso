@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/external-secrets/external-secrets v0.3.6
+	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/cobra v1.2.1
 	k8s.io/api v0.22.2
 	k8s.io/apimachinery v0.22.2

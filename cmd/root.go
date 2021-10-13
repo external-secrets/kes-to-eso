@@ -5,6 +5,7 @@ import (
 	"kestoeso/parser"
 	"os"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -24,13 +25,16 @@ Examples:
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
+		log.SetOutput(os.Stderr)
 		opt := parser.NewDeploymentTarget()
 		opt.ContainerName, _ = cmd.Flags().GetString("kes-container-name")
 		opt.DeploymentName, _ = cmd.Flags().GetString("kes-deployment-name")
 		opt.Namespace, _ = cmd.Flags().GetString("kes-namespace")
-		opt.ClusterStore, _ = cmd.Flags().GetBool("cluster-store")
+		opt.SecretStore, _ = cmd.Flags().GetBool("secret-store")
 		opt.ToStdout, _ = cmd.Flags().GetBool("to-stdout")
 		opt.InputPath, _ = cmd.Flags().GetString("input")
+		opt.TargetNamespace, _ = cmd.Flags().GetString("target-namespace")
+		opt.CopySecretRefs, _ = cmd.Flags().GetBool("copy-secret-refs") // TODO - IMPLEMENT THIS
 		_, err := os.Stat(opt.InputPath)
 		if err != nil {
 			fmt.Println("Missing input path!")
@@ -55,6 +59,9 @@ Examples:
 			}
 
 		}
+		if opt.SecretStore && !opt.CopySecretRefs {
+			log.Warnf("Warning! Backend Secret References are not being copied to the secret store namespaces! This could lead to unintended behavior (--secret-store=true --copy-secret-refs=false)")
+		}
 		parser.ParseKes(opt)
 		os.Exit(0)
 	},
@@ -74,12 +81,14 @@ func init() {
 	// will be global for your application.
 
 	rootCmd.PersistentFlags().Bool("to-stdout", false, "print generated yamls to STDOUT")
-	rootCmd.PersistentFlags().Bool("cluster-store", false, "create cluster stores over simple stores")
+	rootCmd.PersistentFlags().Bool("secret-store", false, "create SecretStores instead of ClusterSecretStores")
+	rootCmd.PersistentFlags().Bool("copy-auths-to-namespace", false, "Copy any auth refs that might be necessary for SecretStores to be up and running")
 	rootCmd.PersistentFlags().StringP("input", "i", "", "path to lookup for KES yamls")
 	rootCmd.PersistentFlags().StringP("output", "o", "", "path ot save ESO-generated yamls")
 	rootCmd.PersistentFlags().String("kes-deployment-name", "kubernetes-external-secrets", "name of KES deployment object")
 	rootCmd.PersistentFlags().String("kes-container-name", "kubernetes-external-secrets", "name of KES container object")
 	rootCmd.PersistentFlags().String("kes-namespace", "default", "namespace where KES is installed")
+	rootCmd.PersistentFlags().String("target-namespace", "", "namespace to install files (override KES definitions)")
 }
 
 // initConfig reads in config file and ENV variables if set.

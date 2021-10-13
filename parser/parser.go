@@ -2,11 +2,15 @@ package parser
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 
 	api "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
@@ -22,7 +26,28 @@ import (
 	yaml "sigs.k8s.io/yaml"
 )
 
-var ESOSecretStoreList = make([]api.SecretStore, 0)
+// Store DB Functions
+
+type SecretStoreDB []api.SecretStore
+type StoreDB interface {
+	Exists(S api.SecretStore) (bool, int)
+}
+
+func (storedb SecretStoreDB) Exists(S api.SecretStore) (bool, int) {
+	for idx, secretStore := range storedb {
+		if secretStore.Namespace == S.Namespace &&
+			secretStore.APIVersion == S.APIVersion &&
+			secretStore.Kind == S.Kind &&
+			reflect.DeepEqual(secretStore.Spec, S.Spec) {
+			return true, idx
+		}
+	}
+	return false, -1
+}
+
+var ESOSecretStoreList = make(SecretStoreDB, 0)
+
+//
 
 type KESExternalSecret struct {
 	Kind       string            `json:"kind,omitempty"`
@@ -53,7 +78,34 @@ type KESExternalSecret struct {
 	}
 }
 
-func readKES(file string) (KESExternalSecret, error) {
+type KesToEsoOptions struct {
+	Namespace       string
+	DeploymentName  string
+	ContainerName   string
+	InputPath       string
+	OutputPath      string
+	ToStdout        bool
+	SecretStore     bool
+	TargetNamespace string
+	CopySecretRefs  bool
+}
+
+func NewDeploymentTarget() *KesToEsoOptions {
+	t := KesToEsoOptions{
+		Namespace:       "default",
+		DeploymentName:  "kubernetes-external-secrets",
+		ContainerName:   "kubernetes-external-secrets",
+		InputPath:       "",
+		OutputPath:      "",
+		ToStdout:        false,
+		SecretStore:     false,
+		TargetNamespace: "",
+		CopySecretRefs:  false,
+	}
+	return &t
+}
+
+func readKESFromFile(file string) (KESExternalSecret, error) {
 	dat, err := os.ReadFile(file)
 	if err != nil {
 		return KESExternalSecret{}, err
@@ -86,19 +138,25 @@ func randSeq(n int) string {
 	return string(b)
 }
 
-func newSecretStore(clusterStore bool) api.SecretStore {
+func newSecretStore(secretStore bool) api.SecretStore {
 	d := api.SecretStore{}
 	d.TypeMeta = metav1.TypeMeta{
 		APIVersion: "external-secrets.io/v1alpha1",
 	}
-	if clusterStore {
-		d.TypeMeta.Kind = "ClusterSecretStore"
-	} else {
+	if secretStore {
 		d.TypeMeta.Kind = "SecretStore"
+	} else {
+		d.TypeMeta.Kind = "ClusterSecretStore"
 	}
 	return d
 }
-func bindProvider(S api.SecretStore, K KESExternalSecret, opt *KesToEsoOptions) api.SecretStore {
+func bindProvider(S api.SecretStore, K KESExternalSecret, opt *KesToEsoOptions) (api.SecretStore, bool) {
+	if opt.TargetNamespace != "" {
+		S.ObjectMeta.Namespace = opt.TargetNamespace
+	} else {
+		S.ObjectMeta.Namespace = K.ObjectMeta.Namespace
+	}
+	var err error
 	backend := K.Spec.BackendType
 	switch backend {
 	case "secretsManager":
@@ -109,8 +167,10 @@ func bindProvider(S api.SecretStore, K KESExternalSecret, opt *KesToEsoOptions) 
 		provider := api.SecretStoreProvider{}
 		provider.AWS = &p
 		S.Spec.Provider = &provider
-		S.ObjectMeta.Name = "aws-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallAWSSecrets(S, opt)
+		S, err = InstallAWSSecrets(S, opt)
+		if err != nil {
+			log.Warnf("Failed to Install AWS Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
+		}
 	case "systemManager":
 		p := api.AWSProvider{}
 		p.Service = api.AWSServiceParameterStore
@@ -119,29 +179,37 @@ func bindProvider(S api.SecretStore, K KESExternalSecret, opt *KesToEsoOptions) 
 		p.Role = K.Spec.RoleArn
 		p.Region = K.Spec.Region
 		S.Spec.Provider = &provider
-		S.ObjectMeta.Name = "aws-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallAWSSecrets(S, opt)
+		S, err = InstallAWSSecrets(S, opt)
+		if err != nil {
+			log.Warnf("Failed to Install AWS Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
+		}
 	case "azureKeyVault": // TODO RECHECK MAPPING ON REAL USE CASE. WHAT KEYVAULTNAME IS USED FOR?
 		p := api.AzureKVProvider{}
 		provider := api.SecretStoreProvider{}
 		provider.AzureKV = &p
 		S.Spec.Provider = &provider
-		S.ObjectMeta.Name = "azurekv-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallAzureKVSecrets(S, opt)
+		S, err = InstallAzureKVSecrets(S, opt)
+		if err != nil {
+			log.Warnf("Failed to Install Azure Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
+		}
 	case "gcpSecretsManager":
 		p := api.GCPSMProvider{}
 		p.ProjectID = K.Spec.ProjectID
 		provider := api.SecretStoreProvider{}
 		provider.GCPSM = &p
 		S.Spec.Provider = &provider
-		S.ObjectMeta.Name = "gcp-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallGCPSMSecrets(S, opt)
+		S, err = InstallGCPSMSecrets(S, opt)
+		if err != nil {
+			log.Warnf("Failed to Install GCP Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
+		}
 	case "ibmcloudSecretsManager":
 		provider := api.SecretStoreProvider{}
 		provider.IBM = &api.IBMProvider{}
 		S.Spec.Provider = &provider
-		S.ObjectMeta.Name = "ibm-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallIBMSecrets(S, opt)
+		S, err = InstallIBMSecrets(S, opt)
+		if err != nil {
+			log.Warnf("Failed to Install IBM Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
+		}
 	case "vault": // TODO RECHECK MAPPING ON REAL USE CASE
 		p := api.VaultProvider{}
 		if K.Spec.KvVersion == 1 {
@@ -152,19 +220,28 @@ func bindProvider(S api.SecretStore, K KESExternalSecret, opt *KesToEsoOptions) 
 		provider := api.SecretStoreProvider{}
 		provider.Vault = &p
 		S.Spec.Provider = &provider
-		S.ObjectMeta.Name = "vault-secretstore-autogen-" + randSeq(8)
-		S, _ = InstallVaultSecrets(S, opt)
+		S, err = InstallVaultSecrets(S, opt)
+		if err != nil {
+			log.Warnf("Failed to Install Vault Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
+		}
 		if K.Spec.VaultMountPoint != "" {
 			S.Spec.Provider.Vault.Auth.Kubernetes.Path = K.Spec.VaultMountPoint
 		}
 		if K.Spec.VaultRole != "" {
 			S.Spec.Provider.Vault.Auth.Kubernetes.Role = K.Spec.VaultRole
 		}
-	case "alicloud": // TODO DEVELOP
-	case "akeyless": // TODO DEVELOP
+	case "alicloud":
+	case "akeyless":
 	default:
 	}
-	return S
+	exists, pos := ESOSecretStoreList.Exists(S)
+	if !exists {
+		S.ObjectMeta.Name = fmt.Sprintf("%v-secretstore-autogen-%v", strings.ToLower(backend), randSeq(8))
+		ESOSecretStoreList = append(ESOSecretStoreList, S)
+		return S, true
+	} else {
+		return ESOSecretStoreList[pos], false
+	}
 }
 func writeYaml(S interface{}, filepath string, to_stdout bool) error {
 	dat, err := yaml.Marshal(S)
@@ -183,10 +260,15 @@ func writeYaml(S interface{}, filepath string, to_stdout bool) error {
 	return nil
 }
 
-func parseGenerals(K KESExternalSecret, E api.ExternalSecret) (api.ExternalSecret, error) {
+func parseGenerals(K KESExternalSecret, E api.ExternalSecret, opt *KesToEsoOptions) (api.ExternalSecret, error) {
 	secret := E
 	secret.ObjectMeta.Name = K.ObjectMeta.Name
 	secret.Spec.Target.Name = K.ObjectMeta.Name // Inherits default in KES, so we should do the same approach here
+	if opt.TargetNamespace != "" {
+		secret.ObjectMeta.Namespace = opt.TargetNamespace
+	} else {
+		secret.ObjectMeta.Namespace = K.ObjectMeta.Namespace
+	}
 	var refKey string
 	for _, kesSecretData := range K.Spec.Data {
 		if kesSecretData.SecretType != "" {
@@ -222,11 +304,11 @@ func linkSecretStore(E api.ExternalSecret, S api.SecretStore) api.ExternalSecret
 }
 
 func isKES(K KESExternalSecret) bool {
-	return K.Kind == "ExternalSecret"
+	return K.Kind == "ExternalSecret" && K.ApiVersion == "kubernetes-client.io/v1"
 }
 
 func newYaml() {
-	fmt.Println("----------")
+	fmt.Println("---")
 }
 
 func ParseKes(opt *KesToEsoOptions) {
@@ -238,24 +320,28 @@ func ParseKes(opt *KesToEsoOptions) {
 		return nil
 	})
 	for _, file := range files {
-		K, err := readKES(file)
+		log.Debugln("Looking for ", file)
+		K, err := readKESFromFile(file)
 		if err != nil {
 			panic(err)
 		}
 		if !isKES(K) {
-			fmt.Printf("%v is not a KES file!", file)
+			log.Warnf("Not a KES File: %v\n", file)
+			continue
 		}
-		E, err := parseGenerals(K, newESOSecret())
+		E, err := parseGenerals(K, newESOSecret(), opt)
 		if err != nil {
 			panic(err)
 		}
-		S := newSecretStore(opt.ClusterStore)
-		S = bindProvider(S, K, opt)
-		store_filename := fmt.Sprintf("%v/secret-store-%v.yaml", opt.OutputPath, S.ObjectMeta.Name)
+		S := newSecretStore(opt.SecretStore)
+		S, newProvider := bindProvider(S, K, opt)
 		secret_filename := fmt.Sprintf("%v/external-secret-%v.yaml", opt.OutputPath, E.ObjectMeta.Name)
-		err = writeYaml(S, store_filename, opt.ToStdout)
-		if err != nil {
-			panic(err)
+		if newProvider {
+			store_filename := fmt.Sprintf("%v/secret-store-%v.yaml", opt.OutputPath, S.ObjectMeta.Name)
+			err = writeYaml(S, store_filename, opt.ToStdout)
+			if err != nil {
+				panic(err)
+			}
 		}
 		E = linkSecretStore(E, S)
 		err = writeYaml(E, secret_filename, opt.ToStdout)
@@ -282,29 +368,6 @@ func initConfig() (*kubernetes.Clientset, error) {
 		return nil, err
 	}
 	return clientset, nil
-}
-
-type KesToEsoOptions struct {
-	Namespace      string
-	DeploymentName string
-	ContainerName  string
-	InputPath      string
-	OutputPath     string
-	ToStdout       bool
-	ClusterStore   bool
-}
-
-func NewDeploymentTarget() *KesToEsoOptions {
-	t := KesToEsoOptions{
-		Namespace:      "default",
-		DeploymentName: "kubernetes-external-secrets",
-		ContainerName:  "kubernetes-external-secrets",
-		InputPath:      "",
-		OutputPath:     "",
-		ToStdout:       true,
-		ClusterStore:   true,
-	}
-	return &t
 }
 
 func getSecretValue(name string, key string, namespace string) (string, error) {
@@ -365,14 +428,18 @@ func InstallAWSSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore
 					} else if env.Value != "" {
 						accessKeyIdSecretKeyRefName = "aws-secrets"
 						accessKeyIdSecretKeyRefKey = "access-key-id"
+						ns := S.ObjectMeta.Namespace
+						if opt.TargetNamespace != "" {
+							ns = opt.TargetNamespace
+						}
 						keySelector := esmeta.SecretKeySelector{
 							Name:      accessKeyIdSecretKeyRefName,
-							Namespace: &target.Namespace,
+							Namespace: &ns,
 							Key:       accessKeyIdSecretKeyRefKey,
 						}
 						newsecret, err = updateOrCreateSecret(newsecret, &keySelector, env.Value)
 						if err != nil {
-							panic(err)
+							return S, err
 						}
 					}
 				}
@@ -383,14 +450,18 @@ func InstallAWSSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore
 					} else if env.Value != "" {
 						secretAccessKeySecretKeyRefName = "aws-secrets"
 						secretAccessKeySecretKeyRefKey = "secret-access-key"
+						ns := S.ObjectMeta.Namespace
+						if opt.TargetNamespace != "" {
+							ns = opt.TargetNamespace
+						}
 						secretSelector := esmeta.SecretKeySelector{
 							Name:      secretAccessKeySecretKeyRefName,
-							Namespace: &target.Namespace,
+							Namespace: &ns,
 							Key:       secretAccessKeySecretKeyRefKey,
 						}
 						newsecret, err = updateOrCreateSecret(newsecret, &secretSelector, env.Value)
 						if err != nil {
-							panic(err)
+							return S, err
 						}
 					}
 				}
@@ -414,9 +485,12 @@ func InstallAWSSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore
 		},
 	}
 	ans.Spec.Provider.AWS.Auth.SecretRef = &awsSecretRef
-	if newsecret != nil {
+	if newsecret.ObjectMeta.Name != "" {
 		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
 		writeYaml(newsecret, secret_filename, target.ToStdout)
+	}
+	if awsSecretRef.AccessKeyID.Name == "" || awsSecretRef.SecretAccessKey.Name == "" {
+		return S, errors.New("could not find aws credential information on kes deployment")
 	}
 	return ans, nil
 }
@@ -447,7 +521,7 @@ func InstallVaultSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretSto
 						name := env.ValueFrom.SecretKeyRef.Name
 						value, err := getSecretValue(name, key, target.Namespace)
 						if err != nil {
-							panic("Could not find secret value for VAULT_ADDR")
+							return S, errors.New("could not find env value for vault_addr")
 						}
 						ans.Spec.Provider.Vault.Server = value
 					}
@@ -458,7 +532,7 @@ func InstallVaultSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretSto
 						name := env.ValueFrom.SecretKeyRef.Name
 						value, err := getSecretValue(name, key, target.Namespace)
 						if err != nil {
-							panic("Could not find secret value for DEFAULT_VAULT_MOUNT_POINT")
+							return S, errors.New("could not find secret value for default_vault_mount_point")
 						}
 						authRef.Path = value
 					} else if env.Value != "" {
@@ -471,7 +545,7 @@ func InstallVaultSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretSto
 						name := env.ValueFrom.SecretKeyRef.Name
 						value, err := getSecretValue(name, key, target.Namespace)
 						if err != nil {
-							panic("Could not find secret value for DEFAULT_VAULT_MOUNT_ROLE")
+							return S, errors.New("could not find secret value for default_vault_role")
 						}
 						authRef.Role = value
 					} else if env.Value != "" {
@@ -482,9 +556,12 @@ func InstallVaultSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretSto
 		}
 	}
 	ans.Spec.Provider.Vault.Auth.Kubernetes = &authRef
-	if newsecret != nil {
+	if newsecret.ObjectMeta.Name != "" {
 		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
 		writeYaml(newsecret, secret_filename, target.ToStdout)
+	}
+	if authRef.Role == "" || authRef.Path == "" || ans.Spec.Provider.Vault.Server == "" {
+		return ans, errors.New("credentials for vault not found in kes deployment")
 	}
 	return ans, nil
 }
@@ -500,7 +577,6 @@ func InstallGCPSMSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretSto
 	if err != nil {
 		return S, err
 	}
-	fmt.Println("Found kes deployment!")
 	containers := deployment.Spec.Template.Spec.Containers
 	volumeName := ""
 	keyName := ""
@@ -538,6 +614,9 @@ func InstallGCPSMSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretSto
 			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Namespace = &target.Namespace
 		}
 	}
+	if reflect.DeepEqual(ans, S) {
+		return ans, errors.New("credentials for gcp sm not found in kes deployment")
+	}
 	return ans, nil
 }
 
@@ -568,53 +647,61 @@ func InstallAzureKVSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretS
 						name := env.ValueFrom.SecretKeyRef.Name
 						value, err := getSecretValue(name, key, target.Namespace)
 						if err != nil {
-							panic("Could not find secret value for AZURE_TENANT_ID")
+							return S, errors.New("could not find secret value for azure_tenant_id")
 						}
 						ans.Spec.Provider.AzureKV.TenantID = &value
 					}
 				}
 				if env.Name == "AZURE_CLIENT_ID" {
+					ns := S.ObjectMeta.Namespace
+					if opt.TargetNamespace != "" {
+						ns = opt.TargetNamespace
+					}
 					if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
 						clientSelector := esmeta.SecretKeySelector{
 							Name:      name,
 							Key:       key,
-							Namespace: &target.Namespace,
+							Namespace: &ns,
 						}
 						authRef.ClientID = &clientSelector
 					} else if env.Value != "" {
 						clientSelector := esmeta.SecretKeySelector{
 							Name:      "azure-secrets",
-							Namespace: &target.Namespace,
+							Namespace: &ns,
 							Key:       "client-id",
 						}
 						newsecret, err = updateOrCreateSecret(newsecret, &clientSelector, env.Value)
 						if err != nil {
-							panic(err)
+							return S, err
 						}
 						authRef.ClientID = &clientSelector
 					}
 				}
 				if env.Name == "AZURE_CLIENT_SECRET" {
+					ns := S.ObjectMeta.Namespace
+					if opt.TargetNamespace != "" {
+						ns = opt.TargetNamespace
+					}
 					if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
 						secretSelector := esmeta.SecretKeySelector{
 							Name:      name,
 							Key:       key,
-							Namespace: &target.Namespace,
+							Namespace: &ns,
 						}
 						authRef.ClientSecret = &secretSelector
 					} else if env.Value != "" {
 						secretSelector := esmeta.SecretKeySelector{
 							Name:      "azure-secrets",
-							Namespace: &target.Namespace,
+							Namespace: &ns,
 							Key:       "client-secrets",
 						}
 						newsecret, err = updateOrCreateSecret(newsecret, &secretSelector, env.Value)
 						if err != nil {
-							panic(err)
+							return S, err
 						}
 						authRef.ClientSecret = &secretSelector
 					}
@@ -624,9 +711,12 @@ func InstallAzureKVSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretS
 		}
 	}
 	ans.Spec.Provider.AzureKV.AuthSecretRef = &authRef
-	if newsecret != nil {
+	if newsecret.ObjectMeta.Name != "" {
 		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
 		writeYaml(newsecret, secret_filename, target.ToStdout)
+	}
+	if authRef.ClientID == nil || authRef.ClientSecret == nil {
+		return ans, errors.New("credentials for azure not found in kes deployment")
 	}
 	return ans, nil
 }
@@ -651,14 +741,18 @@ func InstallIBMSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore
 			for _, env := range envs {
 				if env.Name == "IBM_CLOUD_SECRETS_MANAGER_API_APIKEY" {
 					if env.Value != "" {
+						ns := S.ObjectMeta.Namespace
+						if opt.TargetNamespace != "" {
+							ns = opt.TargetNamespace
+						}
 						secretSelector := esmeta.SecretKeySelector{
 							Name:      "ibm-secrets",
-							Namespace: &target.Namespace,
+							Namespace: &ns,
 							Key:       "api-key",
 						}
 						newsecret, err = updateOrCreateSecret(newsecret, &secretSelector, env.Value)
 						if err != nil {
-							panic(err)
+							return S, err
 						}
 						authRef.SecretRef.SecretAPIKey = secretSelector
 					} else if env.ValueFrom != nil {
@@ -678,7 +772,7 @@ func InstallIBMSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore
 						name := env.ValueFrom.SecretKeyRef.Name
 						value, err := getSecretValue(name, key, target.Namespace)
 						if err != nil {
-							panic("Could not find secret value for IBM_CLOUD_SECRETS_MANAGER_ENDPOINT")
+							return S, errors.New("could not find secret value for ibm_cloud_secrets_manager_api_endpoint")
 						}
 						ans.Spec.Provider.IBM.ServiceURL = &value
 					} else if env.Value != "" {
@@ -693,9 +787,12 @@ func InstallIBMSecrets(S api.SecretStore, opt *KesToEsoOptions) (api.SecretStore
 		}
 	}
 	ans.Spec.Provider.IBM.Auth = authRef
-	if newsecret != nil {
+	if newsecret.ObjectMeta.Name != "" {
 		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
 		writeYaml(newsecret, secret_filename, target.ToStdout)
+	}
+	if authRef.SecretRef.SecretAPIKey.Name == "" {
+		return ans, errors.New("credentials for ibm cloud not found in kes deployment. edit secretstore definitions before using it")
 	}
 	return ans, nil
 
