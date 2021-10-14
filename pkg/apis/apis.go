@@ -9,33 +9,35 @@ import (
 	//	"k8s.io/client-go/tools/clientcmd"
 )
 
+type KESExternalSecretData struct {
+	Key          string
+	Name         string
+	SecretType   string `json:"secretType"`
+	Property     string
+	Recursive    string
+	Path         string
+	VersionStage string
+	Version      string
+	IsBinary     bool `json:"isBinary"`
+}
+type KESExternalSecretSpec struct {
+	BackendType     string
+	VaultMountPoint string
+	VaultRole       string
+	KvVersion       int
+	KeyVaultName    string
+	ProjectID       string
+	RoleArn         string
+	Region          string
+	DataFrom        []string
+	Data            []KESExternalSecretData
+}
 type KESExternalSecret struct {
 	Kind       string            `json:"kind,omitempty"`
 	ApiVersion string            `json:"apiVersion,omitempty"`
 	ObjectMeta metav1.ObjectMeta `json:"metadata"`
-	Spec       struct {
-		BackendType     string
-		VaultMountPoint string
-		VaultRole       string
-		KvVersion       int
-		KeyVaultName    string
-		ProjectID       string
-		RoleArn         string
-		Region          string
-		DataFrom        []string
-		Data            []struct {
-			Key          string
-			Name         string
-			SecretType   string `json:"secretType"`
-			Property     string
-			Recursive    string
-			Path         string
-			VersionStage string
-			Version      string
-			IsBinary     bool `json:"isBinary"`
-		}
-		Template api.ExternalSecretTemplate
-	}
+	Spec       KESExternalSecretSpec
+	Template   api.ExternalSecretTemplate
 }
 
 type KesToEsoOptions struct {

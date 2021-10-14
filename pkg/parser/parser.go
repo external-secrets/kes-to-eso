@@ -58,16 +58,16 @@ func readKESFromFile(file string) (apis.KESExternalSecret, error) {
 	if err != nil {
 		return apis.KESExternalSecret{}, err
 	}
-	T := apis.KESExternalSecret{}
-	err = yaml.Unmarshal(dat, &T)
+	var K = apis.KESExternalSecret{}
+	err = yaml.Unmarshal(dat, &K)
 	if err != nil {
 		return apis.KESExternalSecret{}, err
 	}
-	return T, nil
+	return K, nil
 }
 
 //TODO: Allow future versions here
-func newESOSecret() api.ExternalSecret {
+func NewESOSecret() api.ExternalSecret {
 	d := api.ExternalSecret{}
 	d.TypeMeta = metav1.TypeMeta{
 		Kind:       "ExternalSecret",
@@ -211,7 +211,7 @@ func parseGenerals(K apis.KESExternalSecret, E api.ExternalSecret, options *apis
 		}
 		secret.Spec.DataFrom = append(secret.Spec.DataFrom, esoDataFrom)
 	}
-	secret.Spec.Target.Template = &K.Spec.Template
+	secret.Spec.Target.Template = &K.Template
 	return secret, nil
 
 }
@@ -244,7 +244,7 @@ func Root(client *provider.KesToEsoClient) {
 			log.Warnf("Not a KES File: %v\n", file)
 			continue
 		}
-		E, err := parseGenerals(K, newESOSecret(), client.Options)
+		E, err := parseGenerals(K, NewESOSecret(), client.Options)
 		if err != nil {
 			panic(err)
 		}
