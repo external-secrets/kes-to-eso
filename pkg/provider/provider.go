@@ -12,20 +12,43 @@ import (
 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	//	"k8s.io/client-go/util/homedir"
 	//	"k8s.io/client-go/kubernetes"
 	//	"k8s.io/client-go/rest"
 	//	"k8s.io/client-go/tools/clientcmd"
 )
 
-func InstallAWSSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.SecretStore, error) {
-	ans := S
-	clientset, err := utils.InitKubeConfig()
+type KesToEsoClient struct {
+	Options *apis.KesToEsoOptions
+	Client  kubernetes.Interface
+}
+
+func (c KesToEsoClient) GetSecretValue(name string, key string, namespace string) (string, error) {
+	secret, err := c.Client.CoreV1().Secrets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
-		return S, err
+		return "", err
 	}
-	target := *opt
-	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
+	value := secret.Data[key]
+	return string(value), nil
+}
+
+func (c KesToEsoClient) GetServiceAccountIfAnnotationExists(key string, sa *esmeta.ServiceAccountSelector) (*corev1.ServiceAccount, error) {
+	s, err := c.Client.CoreV1().ServiceAccounts(*sa.Namespace).Get(context.TODO(), sa.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	_, found := s.Annotations[key]
+	if found {
+		return s, nil
+	} else {
+		return nil, errors.New("annotation key absent in service account")
+	}
+}
+
+func (c KesToEsoClient) InstallAWSSecrets(S api.SecretStore) (api.SecretStore, error) {
+	ans := S
+	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(context.TODO(), c.Options.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
 	}
@@ -34,7 +57,7 @@ func InstallAWSSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 	var secretAccessKeySecretKeyRefKey, secretAccessKeySecretKeyRefName string
 	var newsecret = &corev1.Secret{}
 	for _, container := range containers {
-		if container.Name == target.ContainerName {
+		if container.Name == c.Options.ContainerName {
 			containerEnvs := container.Env
 			for _, env := range containerEnvs {
 				if env.Name == "AWS_ACCESS_KEY_ID" {
@@ -45,8 +68,8 @@ func InstallAWSSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 						accessKeyIdSecretKeyRefName = "aws-secrets"
 						accessKeyIdSecretKeyRefKey = "access-key-id"
 						ns := S.ObjectMeta.Namespace
-						if opt.TargetNamespace != "" {
-							ns = opt.TargetNamespace
+						if c.Options.TargetNamespace != "" {
+							ns = c.Options.TargetNamespace
 						}
 						keySelector := esmeta.SecretKeySelector{
 							Name:      accessKeyIdSecretKeyRefName,
@@ -67,8 +90,8 @@ func InstallAWSSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 						secretAccessKeySecretKeyRefName = "aws-secrets"
 						secretAccessKeySecretKeyRefKey = "secret-access-key"
 						ns := S.ObjectMeta.Namespace
-						if opt.TargetNamespace != "" {
-							ns = opt.TargetNamespace
+						if c.Options.TargetNamespace != "" {
+							ns = c.Options.TargetNamespace
 						}
 						secretSelector := esmeta.SecretKeySelector{
 							Name:      secretAccessKeySecretKeyRefName,
@@ -92,28 +115,28 @@ func InstallAWSSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 		AccessKeyID: esmeta.SecretKeySelector{
 			Name:      accessKeyIdSecretKeyRefName,
 			Key:       accessKeyIdSecretKeyRefKey,
-			Namespace: &target.Namespace,
+			Namespace: &c.Options.Namespace,
 		},
 		SecretAccessKey: esmeta.SecretKeySelector{
 			Name:      secretAccessKeySecretKeyRefName,
 			Key:       secretAccessKeySecretKeyRefKey,
-			Namespace: &target.Namespace,
+			Namespace: &c.Options.Namespace,
 		},
 	}
 	ans.Spec.Provider.AWS.Auth.SecretRef = &awsSecretRef
 	if newsecret.ObjectMeta.Name != "" {
-		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
-		err := utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
+		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", c.Options.OutputPath, newsecret.ObjectMeta.Name)
+		err := utils.WriteYaml(newsecret, secret_filename, c.Options.ToStdout)
 		if err != nil {
 			return ans, err
 		}
 	}
 	if awsSecretRef.AccessKeyID.Name == "" || awsSecretRef.SecretAccessKey.Name == "" {
 		saSelector := esmeta.ServiceAccountSelector{
-			Namespace: &target.Namespace,
+			Namespace: &c.Options.Namespace,
 			Name:      deployment.Spec.Template.Spec.ServiceAccountName,
 		}
-		_, err := utils.GetServiceAccountIfAnnotationExists("eks.amazonaws.com/role-arn", &saSelector) // Later On with --copy-secret-auths we can use SA to change namespaces and apply
+		_, err := c.GetServiceAccountIfAnnotationExists("eks.amazonaws.com/role-arn", &saSelector) // Later On with --copy-secret-auths we can use SA to change namespaces and apply
 		if err != nil {
 			return S, errors.New("could not find aws credential information (secrets or sa with role-arn annotation) on kes deployment")
 		}
@@ -123,22 +146,17 @@ func InstallAWSSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 	return ans, nil
 }
 
-func InstallVaultSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.SecretStore, error) {
+func (c KesToEsoClient) InstallVaultSecrets(S api.SecretStore) (api.SecretStore, error) {
 	ans := S
 	authRef := api.VaultKubernetesAuth{}
-	clientset, err := utils.InitKubeConfig()
-	if err != nil {
-		return S, err
-	}
-	target := *opt
-	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
+	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(context.TODO(), c.Options.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
 	}
 	newsecret := &corev1.Secret{}
 	containers := deployment.Spec.Template.Spec.Containers
 	for _, container := range containers {
-		if container.Name == target.ContainerName {
+		if container.Name == c.Options.ContainerName {
 			envs := container.Env
 			for _, env := range envs {
 				if env.Name == "VAULT_ADDR" {
@@ -147,7 +165,7 @@ func InstallVaultSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secr
 					} else if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
-						value, err := utils.GetSecretValue(name, key, target.Namespace)
+						value, err := c.GetSecretValue(name, key, c.Options.Namespace)
 						if err != nil {
 							return S, errors.New("could not find env value for vault_addr")
 						}
@@ -158,7 +176,7 @@ func InstallVaultSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secr
 					if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
-						value, err := utils.GetSecretValue(name, key, target.Namespace)
+						value, err := c.GetSecretValue(name, key, c.Options.Namespace)
 						if err != nil {
 							return S, errors.New("could not find secret value for default_vault_mount_point")
 						}
@@ -171,7 +189,7 @@ func InstallVaultSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secr
 					if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
-						value, err := utils.GetSecretValue(name, key, target.Namespace)
+						value, err := c.GetSecretValue(name, key, c.Options.Namespace)
 						if err != nil {
 							return S, errors.New("could not find secret value for default_vault_role")
 						}
@@ -185,8 +203,8 @@ func InstallVaultSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secr
 	}
 	ans.Spec.Provider.Vault.Auth.Kubernetes = &authRef
 	if newsecret.ObjectMeta.Name != "" {
-		secret_filename := fmt.Sprintf("%v/secret-vault-provider-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
-		err := utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
+		secret_filename := fmt.Sprintf("%v/secret-vault-provider-%v.yaml", c.Options.OutputPath, newsecret.ObjectMeta.Name)
+		err := utils.WriteYaml(newsecret, secret_filename, c.Options.ToStdout)
 		if err != nil {
 			return ans, err
 		}
@@ -197,14 +215,9 @@ func InstallVaultSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secr
 	return ans, nil
 }
 
-func InstallGCPSMSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.SecretStore, error) {
+func (c KesToEsoClient) InstallGCPSMSecrets(S api.SecretStore) (api.SecretStore, error) {
 	ans := S
-	clientset, err := utils.InitKubeConfig()
-	if err != nil {
-		return S, err
-	}
-	target := *opt
-	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
+	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(context.TODO(), c.Options.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
 	}
@@ -212,7 +225,7 @@ func InstallGCPSMSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secr
 	volumeName := ""
 	keyName := ""
 	for _, container := range containers {
-		if container.Name == target.ContainerName {
+		if container.Name == c.Options.ContainerName {
 			mountPath := ""
 			containerEnvs := container.Env
 			for _, env := range containerEnvs {
@@ -243,7 +256,7 @@ func InstallGCPSMSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secr
 			secretName = volume.Secret.SecretName
 			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Name = secretName
 			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Key = keyName
-			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Namespace = &target.Namespace
+			ans.Spec.Provider.GCPSM.Auth.SecretRef.SecretAccessKey.Namespace = &c.Options.Namespace
 		}
 	}
 	if secretName == "" || keyName == "" {
@@ -254,15 +267,11 @@ func InstallGCPSMSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secr
 	return ans, nil
 }
 
-func InstallAzureKVSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.SecretStore, error) {
+func (c KesToEsoClient) InstallAzureKVSecrets(S api.SecretStore) (api.SecretStore, error) {
 	ans := S
 	authRef := api.AzureKVAuth{}
-	clientset, err := utils.InitKubeConfig()
-	if err != nil {
-		return S, err
-	}
-	target := *opt
-	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
+	target := c.Options
+	deployment, err := c.Client.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
 	}
@@ -279,7 +288,7 @@ func InstallAzureKVSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Se
 					} else if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
-						value, err := utils.GetSecretValue(name, key, target.Namespace)
+						value, err := c.GetSecretValue(name, key, target.Namespace)
 						if err != nil {
 							return S, errors.New("could not find secret value for azure_tenant_id")
 						}
@@ -287,9 +296,9 @@ func InstallAzureKVSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Se
 					}
 				}
 				if env.Name == "AZURE_CLIENT_ID" {
-					ns := S.ObjectMeta.Namespace
-					if opt.TargetNamespace != "" {
-						ns = opt.TargetNamespace
+					ns := c.Options.Namespace
+					if c.Options.TargetNamespace != "" {
+						ns = c.Options.TargetNamespace
 					}
 					if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
@@ -314,9 +323,9 @@ func InstallAzureKVSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Se
 					}
 				}
 				if env.Name == "AZURE_CLIENT_SECRET" {
-					ns := S.ObjectMeta.Namespace
-					if opt.TargetNamespace != "" {
-						ns = opt.TargetNamespace
+					ns := c.Options.Namespace
+					if c.Options.TargetNamespace != "" {
+						ns = c.Options.TargetNamespace
 					}
 					if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
@@ -358,29 +367,24 @@ func InstallAzureKVSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Se
 	return ans, nil
 }
 
-func InstallIBMSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.SecretStore, error) {
+func (c KesToEsoClient) InstallIBMSecrets(S api.SecretStore) (api.SecretStore, error) {
 	ans := S
 	authRef := api.IBMAuth{}
-	clientset, err := utils.InitKubeConfig()
-	if err != nil {
-		return S, err
-	}
-	target := *opt
-	deployment, err := clientset.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
+	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(context.TODO(), c.Options.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
 	}
 	newsecret := &corev1.Secret{}
 	containers := deployment.Spec.Template.Spec.Containers
 	for _, container := range containers {
-		if container.Name == target.ContainerName {
+		if container.Name == c.Options.ContainerName {
 			envs := container.Env
 			for _, env := range envs {
 				if env.Name == "IBM_CLOUD_SECRETS_MANAGER_API_APIKEY" {
 					if env.Value != "" {
 						ns := S.ObjectMeta.Namespace
-						if opt.TargetNamespace != "" {
-							ns = opt.TargetNamespace
+						if c.Options.TargetNamespace != "" {
+							ns = c.Options.TargetNamespace
 						}
 						secretSelector := esmeta.SecretKeySelector{
 							Name:      "ibm-secrets",
@@ -398,7 +402,7 @@ func InstallIBMSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 						secretSelector := esmeta.SecretKeySelector{
 							Name:      name,
 							Key:       key,
-							Namespace: &target.Namespace,
+							Namespace: &c.Options.Namespace,
 						}
 						authRef.SecretRef.SecretAPIKey = secretSelector
 					}
@@ -407,7 +411,7 @@ func InstallIBMSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 					if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
-						value, err := utils.GetSecretValue(name, key, target.Namespace)
+						value, err := c.GetSecretValue(name, key, c.Options.Namespace)
 						if err != nil {
 							return S, errors.New("could not find secret value for ibm_cloud_secrets_manager_api_endpoint")
 						}
@@ -425,8 +429,8 @@ func InstallIBMSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 	}
 	ans.Spec.Provider.IBM.Auth = authRef
 	if newsecret.ObjectMeta.Name != "" {
-		secret_filename := fmt.Sprintf("%v/secret-ibm-provider-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
-		err := utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
+		secret_filename := fmt.Sprintf("%v/secret-ibm-provider-%v.yaml", c.Options.OutputPath, newsecret.ObjectMeta.Name)
+		err := utils.WriteYaml(newsecret, secret_filename, c.Options.ToStdout)
 		if err != nil {
 			return ans, err
 		}

@@ -20,6 +20,7 @@ import (
 	//	"k8s.io/client-go/kubernetes"
 	//	"k8s.io/client-go/rest"
 	//	"k8s.io/client-go/tools/clientcmd"
+
 	yaml "sigs.k8s.io/yaml"
 )
 
@@ -85,22 +86,9 @@ func randSeq(n int) string {
 	return string(b)
 }
 
-func newSecretStore(secretStore bool) api.SecretStore {
-	d := api.SecretStore{}
-	d.TypeMeta = metav1.TypeMeta{
-		APIVersion: "external-secrets.io/v1alpha1",
-	}
-	if secretStore {
-		d.TypeMeta.Kind = "SecretStore"
-	} else {
-		d.TypeMeta.Kind = "ClusterSecretStore"
-	}
-	return d
-}
-
-func bindProvider(S api.SecretStore, K apis.KESExternalSecret, opt *apis.KesToEsoOptions) (api.SecretStore, bool) {
-	if opt.TargetNamespace != "" {
-		S.ObjectMeta.Namespace = opt.TargetNamespace
+func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.KesToEsoClient) (api.SecretStore, bool) {
+	if client.Options.TargetNamespace != "" {
+		S.ObjectMeta.Namespace = client.Options.TargetNamespace
 	} else {
 		S.ObjectMeta.Namespace = K.ObjectMeta.Namespace
 	}
@@ -115,7 +103,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, opt *apis.KesToEs
 		prov := api.SecretStoreProvider{}
 		prov.AWS = &p
 		S.Spec.Provider = &prov
-		S, err = provider.InstallAWSSecrets(S, opt)
+		S, err = client.InstallAWSSecrets(S)
 		if err != nil {
 			log.Warnf("Failed to Install AWS Backend Specific configuration: %v. Make sure you have set up Controller Pod Identity or manually edit SecretStore before applying it", err)
 		}
@@ -127,7 +115,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, opt *apis.KesToEs
 		p.Role = K.Spec.RoleArn
 		p.Region = K.Spec.Region
 		S.Spec.Provider = &prov
-		S, err = provider.InstallAWSSecrets(S, opt)
+		S, err = client.InstallAWSSecrets(S)
 		if err != nil {
 			log.Warnf("Failed to Install AWS Backend Specific configuration: %v. Make sure you have set up Controller Pod Identity Manually Edit SecretStore before applying it", err)
 		}
@@ -136,7 +124,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, opt *apis.KesToEs
 		prov := api.SecretStoreProvider{}
 		prov.AzureKV = &p
 		S.Spec.Provider = &prov
-		S, err = provider.InstallAzureKVSecrets(S, opt)
+		S, err = client.InstallAzureKVSecrets(S)
 		if err != nil {
 			log.Warnf("Failed to Install Azure Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
 		}
@@ -146,7 +134,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, opt *apis.KesToEs
 		prov := api.SecretStoreProvider{}
 		prov.GCPSM = &p
 		S.Spec.Provider = &prov
-		S, err = provider.InstallGCPSMSecrets(S, opt)
+		S, err = client.InstallGCPSMSecrets(S)
 		if err != nil {
 			log.Warnf("Failed to Install GCP Backend Specific configuration: %v. Makesure you have set up workload identity or manually edit SecretStore before applying it", err)
 		}
@@ -154,7 +142,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, opt *apis.KesToEs
 		prov := api.SecretStoreProvider{}
 		prov.IBM = &api.IBMProvider{}
 		S.Spec.Provider = &prov
-		S, err = provider.InstallIBMSecrets(S, opt)
+		S, err = client.InstallIBMSecrets(S)
 		if err != nil {
 			log.Warnf("Failed to Install IBM Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
 		}
@@ -168,7 +156,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, opt *apis.KesToEs
 		prov := api.SecretStoreProvider{}
 		prov.Vault = &p
 		S.Spec.Provider = &prov
-		S, err = provider.InstallVaultSecrets(S, opt)
+		S, err = client.InstallVaultSecrets(S)
 		if err != nil {
 			log.Warnf("Failed to Install Vault Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
 		}
@@ -192,12 +180,12 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, opt *apis.KesToEs
 	}
 }
 
-func parseGenerals(K apis.KESExternalSecret, E api.ExternalSecret, opt *apis.KesToEsoOptions) (api.ExternalSecret, error) {
+func parseGenerals(K apis.KESExternalSecret, E api.ExternalSecret, options *apis.KesToEsoOptions) (api.ExternalSecret, error) {
 	secret := E
 	secret.ObjectMeta.Name = K.ObjectMeta.Name
 	secret.Spec.Target.Name = K.ObjectMeta.Name // Inherits default in KES, so we should do the same approach here
-	if opt.TargetNamespace != "" {
-		secret.ObjectMeta.Namespace = opt.TargetNamespace
+	if options.TargetNamespace != "" {
+		secret.ObjectMeta.Namespace = options.TargetNamespace
 	} else {
 		secret.ObjectMeta.Namespace = K.ObjectMeta.Namespace
 	}
@@ -235,9 +223,9 @@ func linkSecretStore(E api.ExternalSecret, S api.SecretStore) api.ExternalSecret
 	return ext
 }
 
-func Root(opt *apis.KesToEsoOptions) {
+func Root(client *provider.KesToEsoClient) {
 	var files []string
-	err := filepath.Walk(opt.InputPath, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(client.Options.InputPath, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
 			files = append(files, path)
 		}
@@ -256,22 +244,22 @@ func Root(opt *apis.KesToEsoOptions) {
 			log.Warnf("Not a KES File: %v\n", file)
 			continue
 		}
-		E, err := parseGenerals(K, newESOSecret(), opt)
+		E, err := parseGenerals(K, newESOSecret(), client.Options)
 		if err != nil {
 			panic(err)
 		}
-		S := newSecretStore(opt.SecretStore)
-		S, newProvider := bindProvider(S, K, opt)
-		secret_filename := fmt.Sprintf("%v/external-secret-%v.yaml", opt.OutputPath, E.ObjectMeta.Name)
+		S := utils.NewSecretStore(client.Options.SecretStore)
+		S, newProvider := bindProvider(S, K, client)
+		secret_filename := fmt.Sprintf("%v/external-secret-%v.yaml", client.Options.OutputPath, E.ObjectMeta.Name)
 		if newProvider {
-			store_filename := fmt.Sprintf("%v/secret-store-%v.yaml", opt.OutputPath, S.ObjectMeta.Name)
-			err = utils.WriteYaml(S, store_filename, opt.ToStdout)
+			store_filename := fmt.Sprintf("%v/secret-store-%v.yaml", client.Options.OutputPath, S.ObjectMeta.Name)
+			err = utils.WriteYaml(S, store_filename, client.Options.ToStdout)
 			if err != nil {
 				panic(err)
 			}
 		}
 		E = linkSecretStore(E, S)
-		err = utils.WriteYaml(E, secret_filename, opt.ToStdout)
+		err = utils.WriteYaml(E, secret_filename, client.Options.ToStdout)
 		if err != nil {
 			panic(err)
 		}

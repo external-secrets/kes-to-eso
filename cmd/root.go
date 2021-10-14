@@ -4,10 +4,14 @@ import (
 	"fmt"
 	"kestoeso/pkg/apis"
 	"kestoeso/pkg/parser"
+	"kestoeso/pkg/provider"
 	"os"
+	"path/filepath"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -75,7 +79,23 @@ Examples:
 		if opt.SecretStore && !opt.CopySecretRefs {
 			log.Warnf("Warning! Backend Secret References are not being copied to the secret store namespaces! This could lead to unintended behavior (--secret-store=true --copy-secret-refs=false)")
 		}
-		parser.Root(opt)
+		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// create the clientset
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			log.Fatal(err)
+		}
+		client := provider.KesToEsoClient{
+			Client:  clientset,
+			Options: opt,
+		}
+
+		parser.Root(&client)
 		os.Exit(0)
 	},
 }
