@@ -39,7 +39,10 @@ Examples:
 		_, err := os.Stat(opt.InputPath)
 		if err != nil {
 			fmt.Println("Missing input path!")
-			cmd.Help()
+			err := cmd.Help()
+			if err != nil {
+				os.Exit(1)
+			}
 			os.Exit(1)
 		}
 		opt.OutputPath, _ = cmd.Flags().GetString("output")
@@ -47,15 +50,24 @@ Examples:
 		if !opt.ToStdout {
 			if err != nil {
 				fmt.Println("Output Path is not a path (to-stdout = false)")
-				cmd.Help()
+				err := cmd.Help()
+				if err != nil {
+					os.Exit(1)
+				}
 				os.Exit(1)
 			} else if fileinfo == nil {
 				fmt.Println("Could not find path for output (to-stdout = false)")
-				cmd.Help()
+				err := cmd.Help()
+				if err != nil {
+					os.Exit(1)
+				}
 				os.Exit(1)
 			} else if !fileinfo.IsDir() {
 				fmt.Println("output path is not a directory (to-stdout = false)")
-				cmd.Help()
+				err := cmd.Help()
+				if err != nil {
+					os.Exit(1)
+				}
 				os.Exit(1)
 			}
 

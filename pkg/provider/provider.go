@@ -103,7 +103,10 @@ func InstallAWSSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 	ans.Spec.Provider.AWS.Auth.SecretRef = &awsSecretRef
 	if newsecret.ObjectMeta.Name != "" {
 		secret_filename := fmt.Sprintf("%v/secret-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
-		utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
+		err := utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
+		if err != nil {
+			return ans, err
+		}
 	}
 	if awsSecretRef.AccessKeyID.Name == "" || awsSecretRef.SecretAccessKey.Name == "" {
 		saSelector := esmeta.ServiceAccountSelector{
@@ -183,7 +186,10 @@ func InstallVaultSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secr
 	ans.Spec.Provider.Vault.Auth.Kubernetes = &authRef
 	if newsecret.ObjectMeta.Name != "" {
 		secret_filename := fmt.Sprintf("%v/secret-vault-provider-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
-		utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
+		err := utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
+		if err != nil {
+			return ans, err
+		}
 	}
 	if authRef.Role == "" || authRef.Path == "" || ans.Spec.Provider.Vault.Server == "" {
 		return ans, errors.New("credentials for vault not found in kes deployment")
@@ -341,7 +347,10 @@ func InstallAzureKVSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Se
 	ans.Spec.Provider.AzureKV.AuthSecretRef = &authRef
 	if newsecret.ObjectMeta.Name != "" {
 		secret_filename := fmt.Sprintf("%v/secret-azure-provider-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
-		utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
+		err := utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
+		if err != nil {
+			return ans, err
+		}
 	}
 	if authRef.ClientID == nil || authRef.ClientSecret == nil {
 		return ans, errors.New("credentials for azure not found in kes deployment")
@@ -417,7 +426,10 @@ func InstallIBMSecrets(S api.SecretStore, opt *apis.KesToEsoOptions) (api.Secret
 	ans.Spec.Provider.IBM.Auth = authRef
 	if newsecret.ObjectMeta.Name != "" {
 		secret_filename := fmt.Sprintf("%v/secret-ibm-provider-%v.yaml", target.OutputPath, newsecret.ObjectMeta.Name)
-		utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
+		err := utils.WriteYaml(newsecret, secret_filename, target.ToStdout)
+		if err != nil {
+			return ans, err
+		}
 	}
 	if authRef.SecretRef.SecretAPIKey.Name == "" {
 		return ans, errors.New("credentials for ibm cloud not found in kes deployment. edit secretstore definitions before using it")

@@ -237,12 +237,15 @@ func linkSecretStore(E api.ExternalSecret, S api.SecretStore) api.ExternalSecret
 
 func Root(opt *apis.KesToEsoOptions) {
 	var files []string
-	filepath.Walk(opt.InputPath, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(opt.InputPath, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
 			files = append(files, path)
 		}
 		return nil
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	for _, file := range files {
 		log.Debugln("Looking for ", file)
 		K, err := readKESFromFile(file)
