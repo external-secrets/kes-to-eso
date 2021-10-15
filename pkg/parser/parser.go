@@ -124,6 +124,8 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 		prov := api.SecretStoreProvider{}
 		prov.AzureKV = &p
 		S.Spec.Provider = &prov
+		vaultUrl := fmt.Sprintf("https://%v.vault.azure.net", K.Spec.KeyVaultName)
+		S.Spec.Provider.AzureKV.VaultURL = &vaultUrl
 		S, err = client.InstallAzureKVSecrets(S)
 		if err != nil {
 			log.Warnf("Failed to Install Azure Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
