@@ -161,7 +161,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 					preffix = pref
 				}
 				if preffix != strings.Split(data.Key, "/")[0] {
-					log.Fatalf("Failed to parse secret store for KES secret! %v contains different vault preffix (miagraion form v2 not yet supported)")
+					log.Fatal("Failed to parse secret store for KES secret!")
 					return S, false
 				}
 			}
@@ -173,6 +173,8 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 		S, err = client.InstallVaultSecrets(S)
 		if err != nil {
 			log.Warnf("Failed to Install Vault Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
+			kubeauth := api.VaultKubernetesAuth{}
+			S.Spec.Provider.Vault.Auth.Kubernetes = &kubeauth
 		}
 		if K.Spec.VaultMountPoint != "" {
 			S.Spec.Provider.Vault.Auth.Kubernetes.Path = K.Spec.VaultMountPoint

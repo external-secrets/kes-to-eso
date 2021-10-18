@@ -155,6 +155,62 @@ func TestBindAWSPSProvider(t *testing.T) {
 }
 
 func TestBindGCPProvider(t *testing.T) {
+	K := apis.KESExternalSecret{
+		Kind:       "ExternalSecret",
+		ApiVersion: "kubernetes-client.io/v1",
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aws-secretsmanager",
+			Namespace: "kes-ns",
+		},
+		Spec: apis.KESExternalSecretSpec{
+			BackendType: "gcpSecretsManager",
+			ProjectID:   "my-project",
+			DataFrom: []string{
+				"path/to/data",
+			},
+			Data: []apis.KESExternalSecretData{
+				{
+					Key:          "kv/demo-service/credentials",
+					Name:         "password",
+					SecretType:   "",
+					Property:     "password",
+					Recursive:    "",
+					Path:         "",
+					VersionStage: "",
+					IsBinary:     false,
+				},
+				{
+					Key:          "kv/demo-service/credentials",
+					Name:         "username",
+					SecretType:   "",
+					Property:     "username",
+					Recursive:    "",
+					Path:         "",
+					VersionStage: "",
+					IsBinary:     false,
+				},
+			},
+		},
+	}
+	S := utils.NewSecretStore(false)
+	want := utils.NewSecretStore(false)
+	p := api.GCPSMProvider{}
+	p.ProjectID = "my-project"
+	prov := api.SecretStoreProvider{}
+	want.ObjectMeta.Namespace = "kes-ns"
+	prov.GCPSM = &p
+	want.Spec.Provider = &prov
+	faker := testclient.NewSimpleClientset()
+	c := provider.KesToEsoClient{
+		Client:  faker,
+		Options: &apis.KesToEsoOptions{},
+	}
+	got, _ := bindProvider(S, K, &c)
+	// Forcing name to be equal, since it's randomly generated
+	want.ObjectMeta.Name = got.ObjectMeta.Name
+	if !reflect.DeepEqual(want, got) {
+		t.Errorf("want %v got %v", want, got)
+	}
 
 }
 
@@ -163,10 +219,136 @@ func TestBindIBMProvider(t *testing.T) {
 }
 
 func TestBindAzureProvider(t *testing.T) {
+	K := apis.KESExternalSecret{
+		Kind:       "ExternalSecret",
+		ApiVersion: "kubernetes-client.io/v1",
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aws-secretsmanager",
+			Namespace: "kes-ns",
+		},
+		Spec: apis.KESExternalSecretSpec{
+			BackendType:     "azureKeyVault",
+			VaultMountPoint: "",
+			VaultRole:       "",
+			ProjectID:       "",
+			KeyVaultName:    "my-vault",
+			DataFrom: []string{
+				"path/to/data",
+			},
+			Data: []apis.KESExternalSecretData{
+				{
+					Key:          "demo-service/credentials",
+					Name:         "password",
+					SecretType:   "",
+					Property:     "password",
+					Recursive:    "",
+					Path:         "",
+					VersionStage: "",
+					IsBinary:     false,
+				},
+				{
+					Key:          "demo-service/credentials",
+					Name:         "username",
+					SecretType:   "",
+					Property:     "username",
+					Recursive:    "",
+					Path:         "",
+					VersionStage: "",
+					IsBinary:     false,
+				},
+			},
+		},
+	}
+	S := utils.NewSecretStore(false)
+	want := utils.NewSecretStore(false)
+	p := api.AzureKVProvider{}
+	url := "https://my-vault.vault.azure.net"
+	p.VaultURL = &url
+	prov := api.SecretStoreProvider{}
+	want.ObjectMeta.Namespace = "kes-ns"
+	prov.AzureKV = &p
+	want.Spec.Provider = &prov
+	faker := testclient.NewSimpleClientset()
+	c := provider.KesToEsoClient{
+		Client:  faker,
+		Options: &apis.KesToEsoOptions{},
+	}
+	got, _ := bindProvider(S, K, &c)
+	// Forcing name to be equal, since it's randomly generated
+	want.ObjectMeta.Name = got.ObjectMeta.Name
+	if !reflect.DeepEqual(want, got) {
+		t.Errorf("want %v got %v", want, got)
+	}
 
 }
 
 func TestBindVaultProvider(t *testing.T) {
+	K := apis.KESExternalSecret{
+		Kind:       "ExternalSecret",
+		ApiVersion: "kubernetes-client.io/v1",
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aws-secretsmanager",
+			Namespace: "kes-ns",
+		},
+		Spec: apis.KESExternalSecretSpec{
+			BackendType:     "vault",
+			VaultMountPoint: "kubernetes",
+			VaultRole:       "my-role",
+			KvVersion:       2,
+			DataFrom: []string{
+				"path/to/data",
+			},
+			Data: []apis.KESExternalSecretData{
+				{
+					Key:          "kv/demo-service/credentials",
+					Name:         "password",
+					SecretType:   "",
+					Property:     "password",
+					Recursive:    "",
+					Path:         "",
+					VersionStage: "",
+					IsBinary:     false,
+				},
+				{
+					Key:          "kv/demo-service/credentials",
+					Name:         "username",
+					SecretType:   "",
+					Property:     "username",
+					Recursive:    "",
+					Path:         "",
+					VersionStage: "",
+					IsBinary:     false,
+				},
+			},
+		},
+	}
+	S := utils.NewSecretStore(false)
+	want := utils.NewSecretStore(false)
+	p := api.VaultProvider{}
+	kubeauth := api.VaultKubernetesAuth{
+		Path: "kubernetes",
+		Role: "my-role",
+	}
+	auth := api.VaultAuth{}
+	p.Version = api.VaultKVStoreV2
+	p.Path = "kv"
+	auth.Kubernetes = &kubeauth
+	p.Auth = auth
+	prov := api.SecretStoreProvider{}
+	want.ObjectMeta.Namespace = "kes-ns"
+	prov.Vault = &p
+	want.Spec.Provider = &prov
+	faker := testclient.NewSimpleClientset()
+	c := provider.KesToEsoClient{
+		Client:  faker,
+		Options: &apis.KesToEsoOptions{},
+	}
+	got, _ := bindProvider(S, K, &c)
+	// Forcing name to be equal, since it's randomly generated
+	want.ObjectMeta.Name = got.ObjectMeta.Name
+	if !reflect.DeepEqual(want, got) {
+		t.Errorf("want %v got %v", want, got)
+	}
 
 }
 
