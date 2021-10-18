@@ -155,6 +155,13 @@ func (c KesToEsoClient) InstallVaultSecrets(S api.SecretStore) (api.SecretStore,
 	}
 	newsecret := &corev1.Secret{}
 	containers := deployment.Spec.Template.Spec.Containers
+	serviceAccountName := deployment.Spec.Template.Spec.ServiceAccountName
+	serviceAccountNS := deployment.ObjectMeta.Namespace
+	serviceAccountRef := esmeta.ServiceAccountSelector{
+		Name:      serviceAccountName,
+		Namespace: &serviceAccountNS,
+	}
+	authRef.ServiceAccountRef = &serviceAccountRef
 	for _, container := range containers {
 		if container.Name == c.Options.ContainerName {
 			envs := container.Env
