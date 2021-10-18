@@ -154,6 +154,18 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 			p.Version = api.VaultKVStoreV1
 		} else {
 			p.Version = api.VaultKVStoreV2
+			preffix := ""
+			for _, data := range K.Spec.Data {
+				if preffix == "" {
+					pref := strings.Split(data.Key, "/")[0]
+					preffix = pref
+				}
+				if preffix != strings.Split(data.Key, "/")[0] {
+					log.Fatalf("Failed to parse secret store for KES secret! %v contains different vault preffix (miagraion form v2 not yet supported)")
+					return S, false
+				}
+			}
+			p.Path = preffix
 		}
 		prov := api.SecretStoreProvider{}
 		prov.Vault = &p
@@ -180,6 +192,27 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 	} else {
 		return ESOSecretStoreList[pos], false
 	}
+}
+
+func parseSpecifics(K apis.KESExternalSecret, E api.ExternalSecret, options *apis.KesToEsoOptions) (api.ExternalSecret, error) {
+	backend := K.Spec.BackendType
+	ans := E
+	switch backend {
+	case "vault":
+		if K.Spec.KvVersion == 2 {
+			for idx, data := range ans.Spec.Data {
+				str := strings.Join(strings.Split(data.RemoteRef.Key, "/")[1:], "/")
+				ans.Spec.Data[idx].RemoteRef.Key = str
+			}
+		}
+		for idx, data := range ans.Spec.Data {
+			if data.RemoteRef.Property == "" {
+				ans.Spec.Data[idx].RemoteRef.Property = ans.Spec.Data[idx].SecretKey
+			}
+		}
+	default:
+	}
+	return ans, nil
 }
 
 func parseGenerals(K apis.KESExternalSecret, E api.ExternalSecret, options *apis.KesToEsoOptions) (api.ExternalSecret, error) {
@@ -247,6 +280,10 @@ func Root(client *provider.KesToEsoClient) {
 			continue
 		}
 		E, err := parseGenerals(K, NewESOSecret(), client.Options)
+		if err != nil {
+			panic(err)
+		}
+		E, err = parseSpecifics(K, E, client.Options)
 		if err != nil {
 			panic(err)
 		}
