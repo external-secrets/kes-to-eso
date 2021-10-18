@@ -196,7 +196,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 	}
 }
 
-func parseSpecifics(K apis.KESExternalSecret, E api.ExternalSecret, options *apis.KesToEsoOptions) (api.ExternalSecret, error) {
+func parseSpecifics(K apis.KESExternalSecret, E api.ExternalSecret) (api.ExternalSecret, error) {
 	backend := K.Spec.BackendType
 	ans := E
 	switch backend {
@@ -260,7 +260,15 @@ func linkSecretStore(E api.ExternalSecret, S api.SecretStore) api.ExternalSecret
 	return ext
 }
 
-func Root(client *provider.KesToEsoClient) {
+type RootResponse struct {
+	Path string
+	Kes  apis.KESExternalSecret
+	Es   api.ExternalSecret
+	Ss   api.SecretStore
+}
+
+func Root(client *provider.KesToEsoClient) []RootResponse {
+	ans := make([]RootResponse, 0)
 	var files []string
 	err := filepath.Walk(client.Options.InputPath, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
@@ -285,7 +293,7 @@ func Root(client *provider.KesToEsoClient) {
 		if err != nil {
 			panic(err)
 		}
-		E, err = parseSpecifics(K, E, client.Options)
+		E, err = parseSpecifics(K, E)
 		if err != nil {
 			panic(err)
 		}
@@ -304,7 +312,15 @@ func Root(client *provider.KesToEsoClient) {
 		if err != nil {
 			panic(err)
 		}
+		response := RootResponse{
+			Path: file,
+			Kes:  K,
+			Es:   E,
+			Ss:   S,
+		}
+		ans = append(ans, response)
 	}
+	return ans
 }
 
 // Functions for kubernetes application management
