@@ -223,6 +223,61 @@ func TestBindGCPProvider(t *testing.T) {
 }
 
 func TestBindIBMProvider(t *testing.T) {
+	ctx := context.TODO()
+	K := apis.KESExternalSecret{
+		Kind:       "ExternalSecret",
+		ApiVersion: "kubernetes-client.io/v1",
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aws-secretsmanager",
+			Namespace: "kes-ns",
+		},
+		Spec: apis.KESExternalSecretSpec{
+			BackendType: "ibmcloudSecretsManager",
+			DataFrom: []string{
+				"path/to/data",
+			},
+			Data: []apis.KESExternalSecretData{
+				{
+					Key:          "demo-service/credentials",
+					Name:         "password",
+					SecretType:   "username_password",
+					Property:     "password",
+					Recursive:    "",
+					Path:         "",
+					VersionStage: "",
+					IsBinary:     false,
+				},
+				{
+					Key:          "demo-service/credentials",
+					Name:         "username",
+					SecretType:   "username_password",
+					Property:     "username",
+					Recursive:    "",
+					Path:         "",
+					VersionStage: "",
+					IsBinary:     false,
+				},
+			},
+		},
+	}
+	S := utils.NewSecretStore(false)
+	want := utils.NewSecretStore(false)
+	p := api.IBMProvider{}
+	prov := api.SecretStoreProvider{}
+	want.ObjectMeta.Namespace = "kes-ns"
+	prov.IBM = &p
+	want.Spec.Provider = &prov
+	faker := testclient.NewSimpleClientset()
+	c := provider.KesToEsoClient{
+		Client:  faker,
+		Options: &apis.KesToEsoOptions{},
+	}
+	got, _ := bindProvider(ctx, S, K, &c)
+	// Forcing name to be equal, since it's randomly generated
+	want.ObjectMeta.Name = got.ObjectMeta.Name
+	if !reflect.DeepEqual(want, got) {
+		t.Errorf("want %v got %v", want, got)
+	}
 
 }
 
@@ -401,6 +456,16 @@ func TestParseGenerals(t *testing.T) {
 					VersionStage: "",
 					IsBinary:     false,
 				},
+				{
+					Key:          "demo-service/credentials",
+					Name:         "username",
+					SecretType:   "username_password",
+					Property:     "username",
+					Recursive:    "",
+					Path:         "",
+					VersionStage: "",
+					IsBinary:     false,
+				},
 			},
 		},
 	}
@@ -440,6 +505,13 @@ func TestParseGenerals(t *testing.T) {
 					SecretKey: "username",
 					RemoteRef: api.ExternalSecretDataRemoteRef{
 						Key:      "demo-service/credentials",
+						Property: "username",
+					},
+				},
+				{
+					SecretKey: "username",
+					RemoteRef: api.ExternalSecretDataRemoteRef{
+						Key:      "username_password/demo-service/credentials",
 						Property: "username",
 					},
 				},
