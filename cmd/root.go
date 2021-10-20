@@ -84,7 +84,6 @@ Examples:
 		if err != nil {
 			log.Fatal(err)
 		}
-
 		// create the clientset
 		clientset, err := kubernetes.NewForConfig(config)
 		if err != nil {
@@ -114,8 +113,8 @@ func init() {
 	// will be global for your application.
 
 	rootCmd.PersistentFlags().Bool("to-stdout", false, "print generated yamls to STDOUT")
-	rootCmd.PersistentFlags().Bool("secret-store", false, "create SecretStores instead of ClusterSecretStores")
-	rootCmd.PersistentFlags().Bool("copy-auths-to-namespace", false, "Copy any auth refs that might be necessary for SecretStores to be up and running")
+	//	rootCmd.PersistentFlags().Bool("secret-store", false, "create SecretStores instead of ClusterSecretStores")
+	//  rootCmd.PersistentFlags().Bool("copy-auths-to-namespace", false, "Copy any auth refs that might be necessary for SecretStores to be up and running")
 	rootCmd.PersistentFlags().StringP("input", "i", "", "path to lookup for KES yamls")
 	rootCmd.PersistentFlags().StringP("output", "o", "", "path ot save ESO-generated yamls")
 	rootCmd.PersistentFlags().String("kes-deployment-name", "kubernetes-external-secrets", "name of KES deployment object")

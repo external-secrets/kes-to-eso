@@ -67,7 +67,7 @@ func (c KesToEsoClient) InstallAWSSecrets(S api.SecretStore) (api.SecretStore, e
 					} else if env.Value != "" {
 						accessKeyIdSecretKeyRefName = "aws-secrets"
 						accessKeyIdSecretKeyRefKey = "access-key-id"
-						ns := S.ObjectMeta.Namespace
+						ns := c.Options.Namespace
 						if c.Options.TargetNamespace != "" {
 							ns = c.Options.TargetNamespace
 						}
@@ -89,7 +89,7 @@ func (c KesToEsoClient) InstallAWSSecrets(S api.SecretStore) (api.SecretStore, e
 					} else if env.Value != "" {
 						secretAccessKeySecretKeyRefName = "aws-secrets"
 						secretAccessKeySecretKeyRefKey = "secret-access-key"
-						ns := S.ObjectMeta.Namespace
+						ns := c.Options.Namespace
 						if c.Options.TargetNamespace != "" {
 							ns = c.Options.TargetNamespace
 						}
@@ -389,7 +389,7 @@ func (c KesToEsoClient) InstallIBMSecrets(S api.SecretStore) (api.SecretStore, e
 			for _, env := range envs {
 				if env.Name == "IBM_CLOUD_SECRETS_MANAGER_API_APIKEY" {
 					if env.Value != "" {
-						ns := S.ObjectMeta.Namespace
+						ns := c.Options.Namespace
 						if c.Options.TargetNamespace != "" {
 							ns = c.Options.TargetNamespace
 						}
