@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"context"
 	"fmt"
 	"kestoeso/pkg/apis"
 	"kestoeso/pkg/provider"
@@ -86,7 +87,7 @@ func randSeq(n int) string {
 	return string(b)
 }
 
-func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.KesToEsoClient) (api.SecretStore, bool) {
+func bindProvider(ctx context.Context, S api.SecretStore, K apis.KESExternalSecret, client *provider.KesToEsoClient) (api.SecretStore, bool) {
 	if client.Options.TargetNamespace != "" {
 		S.ObjectMeta.Namespace = client.Options.TargetNamespace
 	} else {
@@ -103,7 +104,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 		prov := api.SecretStoreProvider{}
 		prov.AWS = &p
 		S.Spec.Provider = &prov
-		S, err = client.InstallAWSSecrets(S)
+		S, err = client.InstallAWSSecrets(ctx, S)
 		if err != nil {
 			log.Warnf("Failed to Install AWS Backend Specific configuration: %v. Make sure you have set up Controller Pod Identity or manually edit SecretStore before applying it", err)
 		}
@@ -115,7 +116,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 		p.Role = K.Spec.RoleArn
 		p.Region = K.Spec.Region
 		S.Spec.Provider = &prov
-		S, err = client.InstallAWSSecrets(S)
+		S, err = client.InstallAWSSecrets(ctx, S)
 		if err != nil {
 			log.Warnf("Failed to Install AWS Backend Specific configuration: %v. Make sure you have set up Controller Pod Identity Manually Edit SecretStore before applying it", err)
 		}
@@ -126,7 +127,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 		S.Spec.Provider = &prov
 		vaultUrl := fmt.Sprintf("https://%v.vault.azure.net", K.Spec.KeyVaultName)
 		S.Spec.Provider.AzureKV.VaultURL = &vaultUrl
-		S, err = client.InstallAzureKVSecrets(S)
+		S, err = client.InstallAzureKVSecrets(ctx, S)
 		if err != nil {
 			log.Warnf("Failed to Install Azure Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
 		}
@@ -136,7 +137,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 		prov := api.SecretStoreProvider{}
 		prov.GCPSM = &p
 		S.Spec.Provider = &prov
-		S, err = client.InstallGCPSMSecrets(S)
+		S, err = client.InstallGCPSMSecrets(ctx, S)
 		if err != nil {
 			log.Warnf("Failed to Install GCP Backend Specific configuration: %v. Makesure you have set up workload identity or manually edit SecretStore before applying it", err)
 		}
@@ -144,7 +145,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 		prov := api.SecretStoreProvider{}
 		prov.IBM = &api.IBMProvider{}
 		S.Spec.Provider = &prov
-		S, err = client.InstallIBMSecrets(S)
+		S, err = client.InstallIBMSecrets(ctx, S)
 		if err != nil {
 			log.Warnf("Failed to Install IBM Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
 		}
@@ -170,7 +171,7 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 		prov := api.SecretStoreProvider{}
 		prov.Vault = &p
 		S.Spec.Provider = &prov
-		S, err = client.InstallVaultSecrets(S)
+		S, err = client.InstallVaultSecrets(ctx, S)
 		if err != nil {
 			log.Warnf("Failed to Install Vault Backend Specific configuration: %v. Manually Edit SecretStore before applying it", err)
 			kubeauth := api.VaultKubernetesAuth{}
@@ -182,9 +183,8 @@ func bindProvider(S api.SecretStore, K apis.KESExternalSecret, client *provider.
 		if K.Spec.VaultRole != "" {
 			S.Spec.Provider.Vault.Auth.Kubernetes.Role = K.Spec.VaultRole
 		}
-	case "alicloud":
-	case "akeyless":
 	default:
+		log.Warnf("Provider %v is not currently supported!", backend)
 	}
 	exists, pos := ESOSecretStoreList.Exists(S)
 	if !exists {
@@ -267,7 +267,7 @@ type RootResponse struct {
 	Ss   api.SecretStore
 }
 
-func Root(client *provider.KesToEsoClient) []RootResponse {
+func Root(ctx context.Context, client *provider.KesToEsoClient) []RootResponse {
 	ans := make([]RootResponse, 0)
 	var files []string
 	err := filepath.Walk(client.Options.InputPath, func(path string, info os.FileInfo, err error) error {
@@ -298,7 +298,7 @@ func Root(client *provider.KesToEsoClient) []RootResponse {
 			panic(err)
 		}
 		S := utils.NewSecretStore(client.Options.SecretStore)
-		S, newProvider := bindProvider(S, K, client)
+		S, newProvider := bindProvider(ctx, S, K, client)
 		secret_filename := fmt.Sprintf("%v/external-secret-%v.yaml", client.Options.OutputPath, E.ObjectMeta.Name)
 		if newProvider {
 			store_filename := fmt.Sprintf("%v/secret-store-%v.yaml", client.Options.OutputPath, S.ObjectMeta.Name)

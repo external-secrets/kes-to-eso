@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"kestoeso/pkg/apis"
 	"kestoeso/pkg/parser"
 	"kestoeso/pkg/provider"
 	"os"
 	"path/filepath"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -93,8 +95,9 @@ Examples:
 			Client:  clientset,
 			Options: opt,
 		}
-
-		parser.Root(&client)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		parser.Root(ctx, &client)
 		os.Exit(0)
 	},
 }

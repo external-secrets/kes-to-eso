@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"context"
 	"fmt"
 	"kestoeso/pkg/apis"
 	"kestoeso/pkg/provider"
@@ -27,6 +28,7 @@ func TestNewEsoSecret(t *testing.T) {
 }
 
 func TestBindAWSSMProvider(t *testing.T) {
+	ctx := context.TODO()
 	K := apis.KESExternalSecret{
 		Kind:       "ExternalSecret",
 		ApiVersion: "kubernetes-client.io/v1",
@@ -83,7 +85,7 @@ func TestBindAWSSMProvider(t *testing.T) {
 		Client:  faker,
 		Options: &apis.KesToEsoOptions{},
 	}
-	got, _ := bindProvider(S, K, &c)
+	got, _ := bindProvider(ctx, S, K, &c)
 	// Forcing name to be equal, since it's randomly generated
 	want.ObjectMeta.Name = got.ObjectMeta.Name
 	if !reflect.DeepEqual(want, got) {
@@ -93,6 +95,7 @@ func TestBindAWSSMProvider(t *testing.T) {
 }
 
 func TestBindAWSPSProvider(t *testing.T) {
+	ctx := context.TODO()
 	K := apis.KESExternalSecret{
 		Kind:       "ExternalSecret",
 		ApiVersion: "kubernetes-client.io/v1",
@@ -149,7 +152,7 @@ func TestBindAWSPSProvider(t *testing.T) {
 		Client:  faker,
 		Options: &apis.KesToEsoOptions{},
 	}
-	got, _ := bindProvider(S, K, &c)
+	got, _ := bindProvider(ctx, S, K, &c)
 	// Forcing name to be equal, since it's randomly generated
 	want.ObjectMeta.Name = got.ObjectMeta.Name
 	if !reflect.DeepEqual(want, got) {
@@ -159,6 +162,7 @@ func TestBindAWSPSProvider(t *testing.T) {
 }
 
 func TestBindGCPProvider(t *testing.T) {
+	ctx := context.TODO()
 	K := apis.KESExternalSecret{
 		Kind:       "ExternalSecret",
 		ApiVersion: "kubernetes-client.io/v1",
@@ -209,7 +213,7 @@ func TestBindGCPProvider(t *testing.T) {
 		Client:  faker,
 		Options: &apis.KesToEsoOptions{},
 	}
-	got, _ := bindProvider(S, K, &c)
+	got, _ := bindProvider(ctx, S, K, &c)
 	// Forcing name to be equal, since it's randomly generated
 	want.ObjectMeta.Name = got.ObjectMeta.Name
 	if !reflect.DeepEqual(want, got) {
@@ -223,6 +227,7 @@ func TestBindIBMProvider(t *testing.T) {
 }
 
 func TestBindAzureProvider(t *testing.T) {
+	ctx := context.TODO()
 	K := apis.KESExternalSecret{
 		Kind:       "ExternalSecret",
 		ApiVersion: "kubernetes-client.io/v1",
@@ -277,7 +282,7 @@ func TestBindAzureProvider(t *testing.T) {
 		Client:  faker,
 		Options: &apis.KesToEsoOptions{},
 	}
-	got, _ := bindProvider(S, K, &c)
+	got, _ := bindProvider(ctx, S, K, &c)
 	// Forcing name to be equal, since it's randomly generated
 	want.ObjectMeta.Name = got.ObjectMeta.Name
 	if !reflect.DeepEqual(want, got) {
@@ -287,6 +292,7 @@ func TestBindAzureProvider(t *testing.T) {
 }
 
 func TestBindVaultProvider(t *testing.T) {
+	ctx := context.TODO()
 	K := apis.KESExternalSecret{
 		Kind:       "ExternalSecret",
 		ApiVersion: "kubernetes-client.io/v1",
@@ -347,7 +353,7 @@ func TestBindVaultProvider(t *testing.T) {
 		Client:  faker,
 		Options: &apis.KesToEsoOptions{},
 	}
-	got, _ := bindProvider(S, K, &c)
+	got, _ := bindProvider(ctx, S, K, &c)
 	// Forcing name to be equal, since it's randomly generated
 	want.ObjectMeta.Name = got.ObjectMeta.Name
 	if !reflect.DeepEqual(want, got) {
@@ -668,6 +674,7 @@ func loadWants(cases []rootStruct) ([]rootStruct, error) {
 	return ans, nil
 }
 func TestRoot(t *testing.T) {
+	ctx := context.TODO()
 	testCases := []rootStruct{
 		{
 			name:   "aws-secretsmanager",
@@ -694,7 +701,7 @@ func TestRoot(t *testing.T) {
 		Client:  faker,
 		Options: &options,
 	}
-	resp := Root(&c)
+	resp := Root(ctx, &c)
 	for idx, testcase := range testCases {
 		assert.Equal(t, testcase.externalSecretWants, resp[idx].Es)
 		if testcase.secretStoreWants != nil {

@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"kestoeso/pkg/apis"
 	"kestoeso/pkg/utils"
@@ -17,6 +18,7 @@ import (
 )
 
 func TestGetSecretValue(t *testing.T) {
+	ctx := context.TODO()
 	secret := corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Secret",
@@ -36,7 +38,7 @@ func TestGetSecretValue(t *testing.T) {
 		Client:  faker,
 		Options: &opt,
 	}
-	ans, err := c.GetSecretValue("test", "key", "default")
+	ans, err := c.GetSecretValue(ctx, "test", "key", "default")
 	if err != nil {
 		t.Errorf("want success got %v", err)
 	}
@@ -46,6 +48,7 @@ func TestGetSecretValue(t *testing.T) {
 }
 
 func TestGetServiceAccount(t *testing.T) {
+	ctx := context.TODO()
 	expectSuccess := corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "sa",
@@ -73,7 +76,7 @@ func TestGetServiceAccount(t *testing.T) {
 		Client:  faker,
 		Options: &apis.KesToEsoOptions{},
 	}
-	sa, err := client.GetServiceAccountIfAnnotationExists("a.annotation", &saSelector)
+	sa, err := client.GetServiceAccountIfAnnotationExists(ctx, "a.annotation", &saSelector)
 	if err != nil {
 		t.Errorf("want success got %v", err)
 	}
@@ -81,7 +84,7 @@ func TestGetServiceAccount(t *testing.T) {
 		t.Errorf("want %v got %v", &expectSuccess, sa)
 	}
 	saSelector = esmeta.ServiceAccountSelector{Name: "sa2", Namespace: &ns}
-	_, err = client.GetServiceAccountIfAnnotationExists("a.annotation", &saSelector)
+	_, err = client.GetServiceAccountIfAnnotationExists(ctx, "a.annotation", &saSelector)
 	if err != nil {
 		errmsg := fmt.Sprintf("%v", err)
 		if errmsg != "annotation key absent in service account" {
@@ -91,6 +94,7 @@ func TestGetServiceAccount(t *testing.T) {
 }
 
 func TestAWSInstall(t *testing.T) {
+	ctx := context.TODO()
 	deploymentWithSecretRef := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Deployment",
@@ -149,7 +153,7 @@ func TestAWSInstall(t *testing.T) {
 		Client:  faker,
 		Options: &opt,
 	}
-	ans, err := c.InstallAWSSecrets(base)
+	ans, err := c.InstallAWSSecrets(ctx, base)
 	if err != nil {
 		t.Errorf("want success got %v", err)
 	}
@@ -175,6 +179,7 @@ func TestAWSInstall(t *testing.T) {
 }
 
 func TestGCPInstall(t *testing.T) {
+	ctx := context.TODO()
 	deploymentWithSecretRef := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Deployment",
@@ -231,7 +236,7 @@ func TestGCPInstall(t *testing.T) {
 		Client:  faker,
 		Options: &opt,
 	}
-	ans, err := c.InstallGCPSMSecrets(base)
+	ans, err := c.InstallGCPSMSecrets(ctx, base)
 	if err != nil {
 		t.Errorf("want success got %v", err)
 	}
@@ -248,6 +253,7 @@ func TestGCPInstall(t *testing.T) {
 }
 
 func TestAzureInstall(t *testing.T) {
+	ctx := context.TODO()
 	deploymentWithSecretRef := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Deployment",
@@ -309,7 +315,7 @@ func TestAzureInstall(t *testing.T) {
 		Client:  faker,
 		Options: &opt,
 	}
-	ans, err := c.InstallAzureKVSecrets(base)
+	ans, err := c.InstallAzureKVSecrets(ctx, base)
 	if err != nil {
 		t.Errorf("want success got %v", err)
 	}
@@ -339,6 +345,7 @@ func TestAzureInstall(t *testing.T) {
 }
 
 func TestIBMInstall(t *testing.T) {
+	ctx := context.TODO()
 	deploymentWithSecretRef := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Deployment",
@@ -391,7 +398,7 @@ func TestIBMInstall(t *testing.T) {
 		Client:  faker,
 		Options: &opt,
 	}
-	ans, err := c.InstallIBMSecrets(base)
+	ans, err := c.InstallIBMSecrets(ctx, base)
 	if err != nil {
 		t.Errorf("want success got %v", err)
 	}
@@ -412,6 +419,7 @@ func TestIBMInstall(t *testing.T) {
 }
 
 func TestVaultInstall(t *testing.T) {
+	ctx := context.TODO()
 	want_path := "kuber-path"
 	want_role := "kuber-role"
 	want_url := "https://localhost"
@@ -465,7 +473,7 @@ func TestVaultInstall(t *testing.T) {
 		Client:  faker,
 		Options: &opt,
 	}
-	ans, err := c.InstallVaultSecrets(base)
+	ans, err := c.InstallVaultSecrets(ctx, base)
 	if err != nil {
 		t.Errorf("want success got %v", err)
 	}

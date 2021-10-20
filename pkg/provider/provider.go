@@ -24,8 +24,8 @@ type KesToEsoClient struct {
 	Client  kubernetes.Interface
 }
 
-func (c KesToEsoClient) GetSecretValue(name string, key string, namespace string) (string, error) {
-	secret, err := c.Client.CoreV1().Secrets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+func (c KesToEsoClient) GetSecretValue(ctx context.Context, name string, key string, namespace string) (string, error) {
+	secret, err := c.Client.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -33,8 +33,8 @@ func (c KesToEsoClient) GetSecretValue(name string, key string, namespace string
 	return string(value), nil
 }
 
-func (c KesToEsoClient) GetServiceAccountIfAnnotationExists(key string, sa *esmeta.ServiceAccountSelector) (*corev1.ServiceAccount, error) {
-	s, err := c.Client.CoreV1().ServiceAccounts(*sa.Namespace).Get(context.TODO(), sa.Name, metav1.GetOptions{})
+func (c KesToEsoClient) GetServiceAccountIfAnnotationExists(ctx context.Context, key string, sa *esmeta.ServiceAccountSelector) (*corev1.ServiceAccount, error) {
+	s, err := c.Client.CoreV1().ServiceAccounts(*sa.Namespace).Get(ctx, sa.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -46,9 +46,9 @@ func (c KesToEsoClient) GetServiceAccountIfAnnotationExists(key string, sa *esme
 	}
 }
 
-func (c KesToEsoClient) InstallAWSSecrets(S api.SecretStore) (api.SecretStore, error) {
+func (c KesToEsoClient) InstallAWSSecrets(ctx context.Context, S api.SecretStore) (api.SecretStore, error) {
 	ans := S
-	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(context.TODO(), c.Options.DeploymentName, metav1.GetOptions{})
+	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(ctx, c.Options.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
 	}
@@ -136,7 +136,7 @@ func (c KesToEsoClient) InstallAWSSecrets(S api.SecretStore) (api.SecretStore, e
 			Namespace: &c.Options.Namespace,
 			Name:      deployment.Spec.Template.Spec.ServiceAccountName,
 		}
-		_, err := c.GetServiceAccountIfAnnotationExists("eks.amazonaws.com/role-arn", &saSelector) // Later On with --copy-secret-auths we can use SA to change namespaces and apply
+		_, err := c.GetServiceAccountIfAnnotationExists(ctx, "eks.amazonaws.com/role-arn", &saSelector) // Later On with --copy-secret-auths we can use SA to change namespaces and apply
 		if err != nil {
 			return S, errors.New("could not find aws credential information (secrets or sa with role-arn annotation) on kes deployment")
 		}
@@ -146,10 +146,10 @@ func (c KesToEsoClient) InstallAWSSecrets(S api.SecretStore) (api.SecretStore, e
 	return ans, nil
 }
 
-func (c KesToEsoClient) InstallVaultSecrets(S api.SecretStore) (api.SecretStore, error) {
+func (c KesToEsoClient) InstallVaultSecrets(ctx context.Context, S api.SecretStore) (api.SecretStore, error) {
 	ans := S
 	authRef := api.VaultKubernetesAuth{}
-	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(context.TODO(), c.Options.DeploymentName, metav1.GetOptions{})
+	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(ctx, c.Options.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
 	}
@@ -172,7 +172,7 @@ func (c KesToEsoClient) InstallVaultSecrets(S api.SecretStore) (api.SecretStore,
 					} else if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
-						value, err := c.GetSecretValue(name, key, c.Options.Namespace)
+						value, err := c.GetSecretValue(ctx, name, key, c.Options.Namespace)
 						if err != nil {
 							return S, errors.New("could not find env value for vault_addr")
 						}
@@ -183,7 +183,7 @@ func (c KesToEsoClient) InstallVaultSecrets(S api.SecretStore) (api.SecretStore,
 					if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
-						value, err := c.GetSecretValue(name, key, c.Options.Namespace)
+						value, err := c.GetSecretValue(ctx, name, key, c.Options.Namespace)
 						if err != nil {
 							return S, errors.New("could not find secret value for default_vault_mount_point")
 						}
@@ -196,7 +196,7 @@ func (c KesToEsoClient) InstallVaultSecrets(S api.SecretStore) (api.SecretStore,
 					if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
-						value, err := c.GetSecretValue(name, key, c.Options.Namespace)
+						value, err := c.GetSecretValue(ctx, name, key, c.Options.Namespace)
 						if err != nil {
 							return S, errors.New("could not find secret value for default_vault_role")
 						}
@@ -222,9 +222,9 @@ func (c KesToEsoClient) InstallVaultSecrets(S api.SecretStore) (api.SecretStore,
 	return ans, nil
 }
 
-func (c KesToEsoClient) InstallGCPSMSecrets(S api.SecretStore) (api.SecretStore, error) {
+func (c KesToEsoClient) InstallGCPSMSecrets(ctx context.Context, S api.SecretStore) (api.SecretStore, error) {
 	ans := S
-	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(context.TODO(), c.Options.DeploymentName, metav1.GetOptions{})
+	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(ctx, c.Options.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
 	}
@@ -274,11 +274,11 @@ func (c KesToEsoClient) InstallGCPSMSecrets(S api.SecretStore) (api.SecretStore,
 	return ans, nil
 }
 
-func (c KesToEsoClient) InstallAzureKVSecrets(S api.SecretStore) (api.SecretStore, error) {
+func (c KesToEsoClient) InstallAzureKVSecrets(ctx context.Context, S api.SecretStore) (api.SecretStore, error) {
 	ans := S
 	authRef := api.AzureKVAuth{}
 	target := c.Options
-	deployment, err := c.Client.AppsV1().Deployments(target.Namespace).Get(context.TODO(), target.DeploymentName, metav1.GetOptions{})
+	deployment, err := c.Client.AppsV1().Deployments(target.Namespace).Get(ctx, target.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
 	}
@@ -295,7 +295,7 @@ func (c KesToEsoClient) InstallAzureKVSecrets(S api.SecretStore) (api.SecretStor
 					} else if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
-						value, err := c.GetSecretValue(name, key, target.Namespace)
+						value, err := c.GetSecretValue(ctx, name, key, target.Namespace)
 						if err != nil {
 							return S, errors.New("could not find secret value for azure_tenant_id")
 						}
@@ -374,10 +374,10 @@ func (c KesToEsoClient) InstallAzureKVSecrets(S api.SecretStore) (api.SecretStor
 	return ans, nil
 }
 
-func (c KesToEsoClient) InstallIBMSecrets(S api.SecretStore) (api.SecretStore, error) {
+func (c KesToEsoClient) InstallIBMSecrets(ctx context.Context, S api.SecretStore) (api.SecretStore, error) {
 	ans := S
 	authRef := api.IBMAuth{}
-	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(context.TODO(), c.Options.DeploymentName, metav1.GetOptions{})
+	deployment, err := c.Client.AppsV1().Deployments(c.Options.Namespace).Get(ctx, c.Options.DeploymentName, metav1.GetOptions{})
 	if err != nil {
 		return S, err
 	}
@@ -418,7 +418,7 @@ func (c KesToEsoClient) InstallIBMSecrets(S api.SecretStore) (api.SecretStore, e
 					if env.ValueFrom != nil {
 						key := env.ValueFrom.SecretKeyRef.Key
 						name := env.ValueFrom.SecretKeyRef.Name
-						value, err := c.GetSecretValue(name, key, c.Options.Namespace)
+						value, err := c.GetSecretValue(ctx, name, key, c.Options.Namespace)
 						if err != nil {
 							return S, errors.New("could not find secret value for ibm_cloud_secrets_manager_api_endpoint")
 						}
