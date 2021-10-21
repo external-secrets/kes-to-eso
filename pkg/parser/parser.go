@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"kestoeso/pkg/apis"
 	"kestoeso/pkg/provider"
@@ -203,7 +204,11 @@ func parseSpecifics(K apis.KESExternalSecret, E api.ExternalSecret) (api.Externa
 	case "vault":
 		if K.Spec.KvVersion == 2 {
 			for idx, data := range ans.Spec.Data {
-				str := strings.Join(strings.Split(data.RemoteRef.Key, "/")[1:], "/")
+				paths := strings.Split(data.RemoteRef.Key, "/")
+				if paths[1] != "data" { // we have the good format like <vaultname>/data/<path>/<to>/<secret>
+					return E, errors.New("secret key not compatible with kv2 format (<vault>/data/<path>/<to>/<secret>)")
+				}
+				str := strings.Join(paths[2:], "/")
 				ans.Spec.Data[idx].RemoteRef.Key = str
 			}
 		}
@@ -211,6 +216,15 @@ func parseSpecifics(K apis.KESExternalSecret, E api.ExternalSecret) (api.Externa
 			if data.RemoteRef.Property == "" {
 				ans.Spec.Data[idx].RemoteRef.Property = ans.Spec.Data[idx].SecretKey
 			}
+		}
+		for idx, dataFrom := range ans.Spec.DataFrom {
+			paths := strings.Split(dataFrom.Key, "/")
+			if paths[1] != "data" { // we have the good format like <vaultname>/data/<path>/<to>/<secret>
+				return E, errors.New("secret key not compatible with kv2 format (<vault>/data/<path>/<to>/<secret>)")
+			}
+			str := strings.Join(paths[2:], "/")
+			ans.Spec.DataFrom[idx].Key = str
+
 		}
 	default:
 	}

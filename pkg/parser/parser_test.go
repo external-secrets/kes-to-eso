@@ -557,11 +557,11 @@ func TestParseSpecifics(t *testing.T) {
 			KvVersion:       2,
 			Region:          "",
 			DataFrom: []string{
-				"path/to/data",
+				"vault-name/data/path/to/data",
 			},
 			Data: []apis.KESExternalSecretData{
 				{
-					Key:          "demo-service/credentials",
+					Key:          "vault-name/data/demo-service/credentials",
 					Name:         "password",
 					SecretType:   "",
 					Property:     "password",
@@ -571,7 +571,7 @@ func TestParseSpecifics(t *testing.T) {
 					IsBinary:     false,
 				},
 				{
-					Key:          "demo-service/credentials",
+					Key:          "vault-name/data/demo-service/credentials",
 					Name:         "username",
 					SecretType:   "",
 					Property:     "username",
@@ -598,20 +598,20 @@ func TestParseSpecifics(t *testing.T) {
 				Template: &api.ExternalSecretTemplate{},
 			},
 			DataFrom: []api.ExternalSecretDataRemoteRef{
-				{Key: "path/to/data"},
+				{Key: "vault-name/data/path/to/data"},
 			},
 			Data: []api.ExternalSecretData{
 				{
 					SecretKey: "password",
 					RemoteRef: api.ExternalSecretDataRemoteRef{
-						Key:      "demo-service/credentials",
+						Key:      "vault-name/data/demo-service/credentials",
 						Property: "password",
 					},
 				},
 				{
 					SecretKey: "username",
 					RemoteRef: api.ExternalSecretDataRemoteRef{
-						Key:      "demo-service/credentials",
+						Key:      "vault-name/data/demo-service/credentials",
 						Property: "username",
 					},
 				},
@@ -644,14 +644,14 @@ func TestParseSpecifics(t *testing.T) {
 				{
 					SecretKey: "password",
 					RemoteRef: api.ExternalSecretDataRemoteRef{
-						Key:      "credentials",
+						Key:      "demo-service/credentials",
 						Property: "password",
 					},
 				},
 				{
 					SecretKey: "username",
 					RemoteRef: api.ExternalSecretDataRemoteRef{
-						Key:      "credentials",
+						Key:      "demo-service/credentials",
 						Property: "username",
 					},
 				},
@@ -660,6 +660,45 @@ func TestParseSpecifics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(want, got) {
 		t.Errorf("want %v got %v", want, got)
+	}
+	bad := api.ExternalSecret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "vault",
+			Namespace: "default",
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ExternalSecret",
+			APIVersion: "external-secrets.io/v1alpha1",
+		},
+		Spec: api.ExternalSecretSpec{
+			Target: api.ExternalSecretTarget{
+				Name:     "vault",
+				Template: &api.ExternalSecretTemplate{},
+			},
+			DataFrom: []api.ExternalSecretDataRemoteRef{
+				{Key: "path/to/data"},
+			},
+			Data: []api.ExternalSecretData{
+				{
+					SecretKey: "password",
+					RemoteRef: api.ExternalSecretDataRemoteRef{
+						Key:      "vault-name/demo-service/credentials",
+						Property: "password",
+					},
+				},
+				{
+					SecretKey: "username",
+					RemoteRef: api.ExternalSecretDataRemoteRef{
+						Key:      "vault-name/demo-service/credentials",
+						Property: "username",
+					},
+				},
+			},
+		},
+	}
+	_, err = parseSpecifics(K, bad)
+	if err.Error() != "secret key not compatible with kv2 format (<vault>/data/<path>/<to>/<secret>)" {
+		t.Errorf("want 'secret key not compatible with kv2 format (<vault>/data/<path>/<to>/<secret>)' got : %v", err)
 	}
 }
 
