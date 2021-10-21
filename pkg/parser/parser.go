@@ -305,11 +305,13 @@ func Root(ctx context.Context, client *provider.KesToEsoClient) []RootResponse {
 		}
 		E, err := parseGenerals(K, NewESOSecret(), client.Options)
 		if err != nil {
-			panic(err)
+			log.Errorf("Could not process file %v: %v. Skipping.", file, err)
+			continue
 		}
 		E, err = parseSpecifics(K, E)
 		if err != nil {
-			panic(err)
+			log.Errorf("Could not process file %v: %v. Skipping.", file, err)
+			continue
 		}
 		S := utils.NewSecretStore(client.Options.SecretStore)
 		S, newProvider := bindProvider(ctx, S, K, client)
