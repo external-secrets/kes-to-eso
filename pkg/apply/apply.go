@@ -44,7 +44,7 @@ func mapSecrets(secrets []string) map[string]string {
 func (c ApplyClient) updateSingleSecret(ctx context.Context, namespace string, secret *corev1.Secret) (bool, error) {
 	for idx, owner := range secret.OwnerReferences {
 		if owner.APIVersion == c.Options.TargetOwner && owner.Kind == "ExternalSecret" {
-			log.Infof("Secret %v/%v matches owner %v", secret.Namespace, secret.Name, c.Options.TargetOwner)
+			log.Debugf("Secret %v/%v matches owner %v", secret.Namespace, secret.Name, c.Options.TargetOwner)
 			tmpSecret := secret.DeepCopy()
 			if len(tmpSecret.OwnerReferences) > 1 {
 				tmpSecret.OwnerReferences[idx] = tmpSecret.OwnerReferences[len(tmpSecret.OwnerReferences)-1]
@@ -74,7 +74,7 @@ func (c ApplyClient) UpdateSecretsFromAll(ctx context.Context, secrets []string)
 	for _, secret := range secretList.Items {
 		_, ok := secretMap[secret.Name]
 		if ok {
-			log.Infof("Reading secret %v/%v", secret.Namespace, secret.Name)
+			log.Debugf("Reading secret %v/%v", secret.Namespace, secret.Name)
 			update, err := c.updateSingleSecret(ctx, secret.Namespace, &secret)
 			if err != nil {
 				return count, err
@@ -97,7 +97,7 @@ func (c ApplyClient) UpdateSecretsFromNamespace(ctx context.Context, secrets []s
 	for _, secret := range secretList.Items {
 		_, ok := secretMap[secret.Name]
 		if ok {
-			log.Infof("Reading secret %v/%v", secret.Namespace, secret.Name)
+			log.Debugf("Reading secret %v/%v", secret.Namespace, secret.Name)
 			update, err := c.updateSingleSecret(ctx, c.Options.Namespace, &secret)
 			if err != nil {
 				return count, err
@@ -117,7 +117,7 @@ func (c ApplyClient) UpdateAll(ctx context.Context) (int, error) {
 	}
 	count := 0
 	for _, secret := range secretList.Items {
-		log.Infof("Reading secret %v/%v", secret.Namespace, secret.Name)
+		log.Debugf("Reading secret %v/%v", secret.Namespace, secret.Name)
 		update, err := c.updateSingleSecret(ctx, secret.Namespace, &secret)
 		if err != nil {
 			return count, err
@@ -136,7 +136,7 @@ func (c ApplyClient) UpdateAllFromNamespace(ctx context.Context) (int, error) {
 	}
 	count := 0
 	for _, secret := range secretList.Items {
-		log.Infof("Reading secret %v/%v", secret.Namespace, secret.Name)
+		log.Debugf("Reading secret %v/%v", secret.Namespace, secret.Name)
 		update, err := c.updateSingleSecret(ctx, c.Options.Namespace, &secret)
 		if err != nil {
 			return count, err
