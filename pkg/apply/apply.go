@@ -41,7 +41,7 @@ func mapSecrets(secrets []string) map[string]string {
 	return ans
 }
 
-func (c ApplyClient) updateSingleSecret(ctx context.Context, namespace string, secret *corev1.Secret) error {
+func (c ApplyClient) updateSingleSecret(ctx context.Context, namespace string, secret *corev1.Secret) (bool, error) {
 	for idx, owner := range secret.OwnerReferences {
 		if owner.APIVersion == c.Options.TargetOwner && owner.Kind == "ExternalSecret" {
 			log.Infof("Secret %v/%v matches owner %v", secret.Namespace, secret.Name, c.Options.TargetOwner)
@@ -55,96 +55,111 @@ func (c ApplyClient) updateSingleSecret(ctx context.Context, namespace string, s
 			}
 			_, err := c.Client.CoreV1().Secrets(namespace).Update(ctx, tmpSecret, metav1.UpdateOptions{})
 			if err != nil {
-				return err
+				return false, err
 			}
 			log.Infof("Secret %v/%v updated successfully", secret.Namespace, secret.Name)
+			return true, nil
 		}
 	}
-	return nil
+	return false, nil
 }
 
-func (c ApplyClient) UpdateSecretsFromAll(ctx context.Context, secrets []string) error {
+func (c ApplyClient) UpdateSecretsFromAll(ctx context.Context, secrets []string) (int, error) {
 	secretMap := mapSecrets(secrets)
 	secretList, err := c.Client.CoreV1().Secrets("").List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return err
+		return 0, err
 	}
+	count := 0
 	for _, secret := range secretList.Items {
 		_, ok := secretMap[secret.Name]
 		if ok {
 			log.Infof("Reading secret %v/%v", secret.Namespace, secret.Name)
-			err := c.updateSingleSecret(ctx, secret.Namespace, &secret)
+			update, err := c.updateSingleSecret(ctx, secret.Namespace, &secret)
 			if err != nil {
-				return err
+				return count, err
+			}
+			if update {
+				count = count + 1
 			}
 		}
 	}
-	return nil
+	return count, nil
 }
 
-func (c ApplyClient) UpdateSecretsFromNamespace(ctx context.Context, secrets []string) error {
+func (c ApplyClient) UpdateSecretsFromNamespace(ctx context.Context, secrets []string) (int, error) {
 	secretMap := mapSecrets(secrets)
 	secretList, err := c.Client.CoreV1().Secrets(c.Options.Namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return err
+		return 0, err
 	}
+	count := 0
 	for _, secret := range secretList.Items {
 		_, ok := secretMap[secret.Name]
 		if ok {
 			log.Infof("Reading secret %v/%v", secret.Namespace, secret.Name)
-			err := c.updateSingleSecret(ctx, c.Options.Namespace, &secret)
+			update, err := c.updateSingleSecret(ctx, c.Options.Namespace, &secret)
 			if err != nil {
-				return err
+				return count, err
+			}
+			if update {
+				count = count + 1
 			}
 		}
 	}
-	return nil
+	return count, nil
 }
 
-func (c ApplyClient) UpdateAll(ctx context.Context) error {
+func (c ApplyClient) UpdateAll(ctx context.Context) (int, error) {
 	secretList, err := c.Client.CoreV1().Secrets("").List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return err
+		return 0, err
 	}
+	count := 0
 	for _, secret := range secretList.Items {
 		log.Infof("Reading secret %v/%v", secret.Namespace, secret.Name)
-		err := c.updateSingleSecret(ctx, secret.Namespace, &secret)
+		update, err := c.updateSingleSecret(ctx, secret.Namespace, &secret)
 		if err != nil {
-			return err
+			return count, err
+		}
+		if update {
+			count = count + 1
 		}
 	}
-	return nil
+	return count, nil
 }
 
-func (c ApplyClient) UpdateAllFromNamespace(ctx context.Context) error {
+func (c ApplyClient) UpdateAllFromNamespace(ctx context.Context) (int, error) {
 	secretList, err := c.Client.CoreV1().Secrets(c.Options.Namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return err
+		return 0, err
 	}
+	count := 0
 	for _, secret := range secretList.Items {
 		log.Infof("Reading secret %v/%v", secret.Namespace, secret.Name)
-		err := c.updateSingleSecret(ctx, c.Options.Namespace, &secret)
+		update, err := c.updateSingleSecret(ctx, c.Options.Namespace, &secret)
 		if err != nil {
-			return err
+			return count, err
+		}
+		if update {
+			count = count + 1
 		}
 	}
-	return nil
+	return count, nil
 }
 
 func Root(ctx context.Context, client *ApplyClient, secrets []string) error {
+	var count int
+	var err error
 	if client.Options.AllSecrets && client.Options.AllNamespaces {
-		err := client.UpdateAll(ctx)
-		return err
+		count, err = client.UpdateAll(ctx)
 	} else if client.Options.AllSecrets {
-		err := client.UpdateAllFromNamespace(ctx)
-		return err
-
+		count, err = client.UpdateAllFromNamespace(ctx)
 	} else if client.Options.AllNamespaces {
-		err := client.UpdateSecretsFromAll(ctx, secrets)
-		return err
-
+		count, err = client.UpdateSecretsFromAll(ctx, secrets)
 	} else {
-		err := client.UpdateSecretsFromNamespace(ctx, secrets)
-		return err
+		count, err = client.UpdateSecretsFromNamespace(ctx, secrets)
 	}
+	log.Infof("Updated %v secrets", count)
+	return err
 }
