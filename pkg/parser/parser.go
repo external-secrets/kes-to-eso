@@ -13,9 +13,9 @@ import (
 	"reflect"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
 	api "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
+	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	//	"k8s.io/client-go/util/homedir"
@@ -86,6 +86,28 @@ func randSeq(n int) string {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+func mapLoop(m map[string]interface{}) error {
+	for k, _ := range m {
+		if k != "metadata" && k != "type" {
+			return fmt.Errorf("%v templating is currently not supported", k)
+		}
+	}
+	return nil
+}
+
+func canMigrateKes(K apis.KESExternalSecret) error {
+	err := mapLoop(K.Spec.Template)
+	if err != nil {
+		return err
+	}
+	for _, data := range K.Spec.Data {
+		if data.Path != "" {
+			return errors.New("externalSecret with path selection is currently not supported")
+		}
+	}
+	return nil
 }
 
 func bindProvider(ctx context.Context, S api.SecretStore, K apis.KESExternalSecret, client *provider.KesToEsoClient) (api.SecretStore, bool) {
@@ -262,11 +284,57 @@ func parseGenerals(K apis.KESExternalSecret, E api.ExternalSecret, options *apis
 		}
 		secret.Spec.DataFrom = append(secret.Spec.DataFrom, esoDataFrom)
 	}
-	secret.Spec.Target.Template = &K.Template
+	v, ok := K.Spec.Template["metadata"]
+	if ok {
+		m, ok := v.(map[string]interface{})
+		if ok {
+			templ, err := fillTemplate(secret.Spec.Target.Template, m)
+			if err != nil {
+				return secret, err
+			}
+			secret.Spec.Target.Template = &templ
+		}
+	}
+	v, ok = K.Spec.Template["type"]
+	if ok {
+		secret.Spec.Target.Template.Type = corev1.SecretType(v.(string))
+	}
+
 	return secret, nil
 
 }
 
+func fillTemplate(template *api.ExternalSecretTemplate, m map[string]interface{}) (api.ExternalSecretTemplate, error) {
+	ans := api.ExternalSecretTemplate{}
+	if template != nil {
+		ans = *template
+	}
+	annot, okann := m["annotations"]
+	tm := api.ExternalSecretTemplateMetadata{
+		Labels:      make(map[string]string),
+		Annotations: make(map[string]string),
+	}
+	if okann {
+		metadata, ok := annot.(map[string]interface{})
+		if ok {
+			for k, v := range metadata {
+				tm.Annotations[k] = v.(string)
+			}
+		}
+	}
+	label, oklab := m["labels"]
+	if oklab {
+		metadata, ok := label.(map[string]interface{})
+		if ok {
+			for k, v := range metadata {
+				tm.Labels[k] = v.(string)
+			}
+		}
+	}
+	ans.Metadata = api.ExternalSecretTemplateMetadata{}
+	ans.Metadata = tm
+	return ans, nil
+}
 func linkSecretStore(E api.ExternalSecret, S api.SecretStore) api.ExternalSecret {
 	ext := E
 	ext.Spec.SecretStoreRef.Name = S.ObjectMeta.Name
@@ -300,7 +368,12 @@ func Root(ctx context.Context, client *provider.KesToEsoClient) []RootResponse {
 			panic(err)
 		}
 		if !utils.IsKES(K) {
-			log.Warnf("Not a KES File: %v\n", file)
+			log.Errorf("Not a KES File: %v\n", file)
+			continue
+		}
+		err = canMigrateKes(K)
+		if err != nil {
+			log.Errorf("Cannot process file %v, %v. Skipping", file, err)
 			continue
 		}
 		E, err := parseGenerals(K, NewESOSecret(), client.Options)

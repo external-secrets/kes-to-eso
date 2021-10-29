@@ -1,7 +1,6 @@
 package apis
 
 import (
-	api "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	//	"k8s.io/client-go/util/homedir"
 	//	"k8s.io/client-go/kubernetes"
@@ -31,13 +30,13 @@ type KESExternalSecretSpec struct {
 	Region          string
 	DataFrom        []string
 	Data            []KESExternalSecretData
+	Template        map[string]interface{}
 }
 type KESExternalSecret struct {
 	Kind       string            `json:"kind,omitempty"`
 	ApiVersion string            `json:"apiVersion,omitempty"`
 	ObjectMeta metav1.ObjectMeta `json:"metadata"`
 	Spec       KESExternalSecretSpec
-	Template   api.ExternalSecretTemplate
 }
 
 type KesToEsoOptions struct {
