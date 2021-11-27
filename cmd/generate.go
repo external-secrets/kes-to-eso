@@ -1,18 +1,3 @@
-/*
-Copyright © 2021 NAME HERE <EMAIL ADDRESS>
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package cmd
 
 import (
@@ -32,7 +17,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// generateCmd represents the generate command
 var generateCmd = &cobra.Command{
 	Use:   "generate",
 	Short: "A tool to convert KES YAML files into ESO YAML files",
@@ -100,7 +84,6 @@ var generateCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		// create the clientset
 		clientset, err := kubernetes.NewForConfig(config)
 		if err != nil {
 			log.Fatal(err)
@@ -118,10 +101,7 @@ var generateCmd = &cobra.Command{
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
 	generateCmd.Flags().Bool("to-stdout", false, "print generated yamls to STDOUT")
-	//	rootCmd.PersistentFlags().Bool("secret-store", false, "create SecretStores instead of ClusterSecretStores")
-	//  rootCmd.PersistentFlags().Bool("copy-auths-to-namespace", false, "Copy any auth refs that might be necessary for SecretStores to be up and running")
 	generateCmd.Flags().StringP("input", "i", "", "path to lookup for KES yamls")
 	generateCmd.Flags().StringP("output", "o", "", "path ot save ESO-generated yamls")
 	generateCmd.Flags().String("kes-deployment-name", "kubernetes-external-secrets", "name of KES deployment object")
@@ -129,11 +109,4 @@ func init() {
 	generateCmd.Flags().StringP("kes-namespace", "n", "default", "namespace where KES is installed")
 	generateCmd.Flags().String("target-namespace", "", "namespace to install files (not recommended - overrides KES-ExternalSecrets definitions)")
 
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// generateCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// generateCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

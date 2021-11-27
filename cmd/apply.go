@@ -1,18 +1,3 @@
-/*
-Copyright © 2021 NAME HERE <EMAIL ADDRESS>
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package cmd
 
 import (
@@ -28,16 +13,16 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// applyCmd represents the apply command
 var applyCmd = &cobra.Command{
 	Use:   "apply",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "kestoeso apply --all-secrets --all-namespaces",
+	Long: `kestoeso apply allows users to quickly remove secret ownership from KES.
+	This allows ESO to fetch ownership and enables a clean migration (i.e. no secrets being deleted).
+	A valid kubeconfig is needed for the command to work. Currently, only default setup works.
+	Examples:
+	kestoeso apply --all-secrets --all-namespaces
+	kestoeso apply -s mysecret,mysecret2 --namespace mynamespace
+	kestoeso apply --all-secrets --target-owner another-kubernetes-client.io/v1`,
 	Run: func(cmd *cobra.Command, args []string) {
 		opt := apply.NewApplyOptions()
 		opt.AllNamespaces, _ = cmd.Flags().GetBool("all-namespaces")
@@ -50,7 +35,6 @@ to quickly create a Cobra application.`,
 		if err != nil {
 			log.Fatal(err)
 		}
-		// create the clientset
 		clientset, err := kubernetes.NewForConfig(config)
 		if err != nil {
 			log.Fatal(err)
@@ -79,13 +63,4 @@ func init() {
 	applyCmd.Flags().StringSliceP("secrets", "s", empty, "list of secret names to be updated")
 	applyCmd.Flags().String("target-owner", "kubernetes-client.io/v1", "Target ownership value that secrets are going to be updated")
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// applyCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// applyCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

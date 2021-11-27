@@ -10,28 +10,6 @@ import (
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
-// import (
-// 	"context"
-// 	"fmt"
-// 	"kestoeso/pkg/apis"
-// 	"kestoeso/pkg/utils"
-// 	"reflect"
-// 	"testing"
-
-// 	api "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
-
-// 	esmeta "github.com/external-secrets/external-secrets/apis/meta/v1"
-// 	appsv1 "k8s.io/api/apps/v1"
-// 	corev1 "k8s.io/api/core/v1"
-// 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-//
-// )
-
-// func TestUpdateSingleSecret(t *testing.T) {
-// 	ctx := context.TODO()
-
-// }
-
 func createSecret(secretName string, secretNamespace string, OwnerType string) *corev1.Secret {
 	secret := corev1.Secret{
 		TypeMeta: metav1.TypeMeta{

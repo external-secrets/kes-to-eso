@@ -90,7 +90,7 @@ func randSeq(n int) string {
 
 func mapLoop(m map[string]interface{}) error {
 	for k, _ := range m {
-		if k != "metadata" && k != "type" {
+		if k != "metadata" && k != "type" && k != "data" {
 			return fmt.Errorf("%v templating is currently not supported", k)
 		}
 	}
@@ -284,50 +284,58 @@ func parseGenerals(K apis.KESExternalSecret, E api.ExternalSecret, options *apis
 		}
 		secret.Spec.DataFrom = append(secret.Spec.DataFrom, esoDataFrom)
 	}
-	v, ok := K.Spec.Template["metadata"]
-	if ok {
-		m, ok := v.(map[string]interface{})
-		if ok {
-			templ, err := fillTemplate(secret.Spec.Target.Template, m)
-			if err != nil {
-				return secret, err
-			}
-			secret.Spec.Target.Template = &templ
-		}
+	templ, err := fillTemplate(secret.Spec.Target.Template, K.Spec.Template)
+	if err != nil {
+		return secret, err
 	}
-	v, ok = K.Spec.Template["type"]
-	if ok {
-		secret.Spec.Target.Template.Type = corev1.SecretType(v.(string))
-	}
-
+	secret.Spec.Target.Template = &templ
 	return secret, nil
 
 }
 
 func fillTemplate(template *api.ExternalSecretTemplate, m map[string]interface{}) (api.ExternalSecretTemplate, error) {
+	tm := api.ExternalSecretTemplateMetadata{}
 	ans := api.ExternalSecretTemplate{}
 	if template != nil {
 		ans = *template
 	}
-	annot, okann := m["annotations"]
-	tm := api.ExternalSecretTemplateMetadata{
-		Labels:      make(map[string]string),
-		Annotations: make(map[string]string),
+	v, ok := m["type"]
+	if ok {
+		ans.Type = corev1.SecretType(v.(string))
 	}
-	if okann {
-		metadata, ok := annot.(map[string]interface{})
+	v, ok = m["data"]
+	if ok {
+		ans.Data = make(map[string]string)
+		metadata, ok := v.(map[string]interface{})
 		if ok {
 			for k, v := range metadata {
-				tm.Annotations[k] = v.(string)
+				ans.Data[k] = v.(string)
 			}
 		}
 	}
-	label, oklab := m["labels"]
-	if oklab {
-		metadata, ok := label.(map[string]interface{})
+	v, ok = m["metadata"]
+	if ok {
+		n, ok := v.(map[string]interface{})
 		if ok {
-			for k, v := range metadata {
-				tm.Labels[k] = v.(string)
+			annot, okann := n["annotations"]
+			if okann {
+				tm.Annotations = make(map[string]string)
+				meta, ok := annot.(map[string]interface{})
+				if ok {
+					for k, v := range meta {
+						tm.Annotations[k] = v.(string)
+					}
+				}
+			}
+			label, oklab := n["labels"]
+			if oklab {
+				tm.Labels = make(map[string]string)
+				meta, ok := label.(map[string]interface{})
+				if ok {
+					for k, v := range meta {
+						tm.Labels[k] = v.(string)
+					}
+				}
 			}
 		}
 	}

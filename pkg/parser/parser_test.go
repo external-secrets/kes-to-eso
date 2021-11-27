@@ -518,7 +518,7 @@ func TestParseGenerals(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(want, got) {
+	if !assert.Equal(t, want, got) {
 		t.Errorf("want %v got %v - %v x %v", want, got, want.Spec.Target.Template, got.Spec.Target.Template)
 	}
 }
@@ -658,7 +658,7 @@ func TestParseSpecifics(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(want, got) {
+	if !assert.Equal(t, want, got) {
 		t.Errorf("want %v got %v", want, got)
 	}
 	bad := api.ExternalSecret{
