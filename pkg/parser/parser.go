@@ -89,7 +89,7 @@ func randSeq(n int) string {
 }
 
 func mapLoop(m map[string]interface{}) error {
-	for k, _ := range m {
+	for k := range m {
 		if k != "metadata" && k != "type" && k != "data" {
 			return fmt.Errorf("%v templating is currently not supported", k)
 		}
