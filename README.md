@@ -1,5 +1,5 @@
 # KES to ESO
-kes-to-eso is a tool driven to facilitate migrating from [kubernetes-external-secrets](https://github.com/external-secrets/kubernetes-external-secrets) to [external-secrets](https://github-com/external-secrets/external-secrets)
+kes-to-eso is a tool driven to facilitate migrating from [kubernetes-external-secrets](https://github.com/external-secrets/kubernetes-external-secrets) to [external-secrets](https://github.com/external-secrets/external-secrets)
 
 It has a binary tool which makes the translation between `kes-ExternalSecrets` and `eso-ExternalSecrets+SecretStores`. By default, it creates `ClusterSecretStores` bound to any credentials already available for `kes`. Whenever a credential is stored only in environment variables, it will also output the appropriate secret to be created.
 
