@@ -30,7 +30,12 @@ var applyCmd = &cobra.Command{
 		opt.Namespace, _ = cmd.Flags().GetString("namespace")
 		opt.TargetOwner, _ = cmd.Flags().GetString("target-owner")
 		targetSecrets, _ := cmd.Flags().GetStringSlice("secrets")
-		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		kubeconfig := ""
+		if os.Getenv("KUBECONFIG") == "" {
+			kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		} else {
+			kubeconfig = os.Getenv("KUBECONFIG")
+		}
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
 			log.Fatal(err)

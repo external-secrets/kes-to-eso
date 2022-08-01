@@ -79,7 +79,12 @@ var generateCmd = &cobra.Command{
 		if opt.SecretStore && !opt.CopySecretRefs {
 			log.Warnf("Warning! Backend Secret References are not being copied to the secret store namespaces! This could lead to unintended behavior (--secret-store=true --copy-secret-refs=false)")
 		}
-		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		kubeconfig := ""
+		if os.Getenv("KUBECONFIG") == "" {
+			kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		} else {
+			kubeconfig = os.Getenv("KUBECONFIG")
+		}
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
 			log.Fatal(err)
