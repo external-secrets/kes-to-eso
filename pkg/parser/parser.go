@@ -178,18 +178,10 @@ func bindProvider(ctx context.Context, S api.SecretStore, K apis.KESExternalSecr
 			p.Version = api.VaultKVStoreV1
 		} else {
 			p.Version = api.VaultKVStoreV2
-			preffix := ""
-			for _, data := range K.Spec.Data {
-				if preffix == "" {
-					pref := strings.Split(data.Key, "/")[0]
-					preffix = pref
-				}
-				if preffix != strings.Split(data.Key, "/")[0] {
-					log.Fatal("Failed to parse secret store for KES secret!")
-					return S, false
-				}
+			p.Path = getVaultProviderPath(K.Spec.Data, K.Spec.DataFrom)
+			if p.Path == "" {
+				return S, false
 			}
-			p.Path = preffix
 		}
 		prov := api.SecretStoreProvider{}
 		prov.Vault = &p
@@ -217,6 +209,29 @@ func bindProvider(ctx context.Context, S api.SecretStore, K apis.KESExternalSecr
 	} else {
 		return ESOSecretStoreList[pos], false
 	}
+}
+
+func getVaultProviderPath(data []apis.KESExternalSecretData, dataFrom []string) string {
+	prefix := ""
+	for _, d := range data {
+		if prefix == "" {
+			prefix = strings.Split(d.Key, "/")[0]
+		}
+		if prefix != strings.Split(d.Key, "/")[0] {
+			log.Fatal("Failed to parse secret store for KES secret!")
+			return ""
+		}
+	}
+	for _, d := range dataFrom {
+		if prefix == "" {
+			prefix = strings.Split(d, "/")[0]
+		}
+		if prefix != strings.Split(d, "/")[0] {
+			log.Fatal("Failed to parse secret store for KES secret!")
+			return ""
+		}
+	}
+	return prefix
 }
 
 func parseSpecifics(K apis.KESExternalSecret, E api.ExternalSecret) (api.ExternalSecret, error) {
