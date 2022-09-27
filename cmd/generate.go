@@ -7,7 +7,6 @@ import (
 	"kestoeso/pkg/parser"
 	"kestoeso/pkg/provider"
 	"os"
-	"path/filepath"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -21,10 +20,10 @@ var generateCmd = &cobra.Command{
 	Use:   "generate",
 	Short: "A tool to convert KES YAML files into ESO YAML files",
 	Long: `kes-to-eso generate is a tool to allow quick conversion between 
-	kubernetes-external-secrets and external-secrets-operator.
-	It reads kubernetes-external-secrets deployment declaration and uses
-	this information alongside with any KES externalSecrets declaration to
-	provide ESO SecretStores and ExternalSecrets definitions.
+kubernetes-external-secrets and external-secrets-operator.
+It reads kubernetes-external-secrets deployment declaration and uses
+this information alongside with any KES externalSecrets declaration to
+provide ESO SecretStores and ExternalSecrets definitions.
 	Examples:
 		kes-to-eso generate -i path/to/kes/files -o eso/output/dir --to-stdout=false
 		kes-to-eso generate -i path/to/a/single.yaml --kes-namespace=my_custom_namespace
@@ -79,12 +78,6 @@ var generateCmd = &cobra.Command{
 		if opt.SecretStore && !opt.CopySecretRefs {
 			log.Warnf("Warning! Backend Secret References are not being copied to the secret store namespaces! This could lead to unintended behavior (--secret-store=true --copy-secret-refs=false)")
 		}
-		kubeconfig := ""
-		if os.Getenv("KUBECONFIG") == "" {
-			kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
-		} else {
-			kubeconfig = os.Getenv("KUBECONFIG")
-		}
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
 			log.Fatal(err)
@@ -113,5 +106,4 @@ func init() {
 	generateCmd.Flags().String("kes-container-name", "kubernetes-external-secrets", "name of KES container object")
 	generateCmd.Flags().StringP("kes-namespace", "n", "default", "namespace where KES is installed")
 	generateCmd.Flags().String("target-namespace", "", "namespace to install files (not recommended - overrides KES-ExternalSecrets definitions)")
-
 }

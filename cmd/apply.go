@@ -4,7 +4,6 @@ import (
 	"context"
 	"kestoeso/pkg/apply"
 	"os"
-	"path/filepath"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -30,12 +29,6 @@ var applyCmd = &cobra.Command{
 		opt.Namespace, _ = cmd.Flags().GetString("namespace")
 		opt.TargetOwner, _ = cmd.Flags().GetString("target-owner")
 		targetSecrets, _ := cmd.Flags().GetStringSlice("secrets")
-		kubeconfig := ""
-		if os.Getenv("KUBECONFIG") == "" {
-			kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
-		} else {
-			kubeconfig = os.Getenv("KUBECONFIG")
-		}
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
 			log.Fatal(err)
@@ -60,12 +53,10 @@ var applyCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(applyCmd)
 	var empty = make([]string, 0)
 	applyCmd.Flags().BoolP("all-namespaces", "A", false, "Updates secrets for All Namespaces")
 	applyCmd.Flags().Bool("all-secrets", false, "updates all secrets from one namespace")
 	applyCmd.Flags().StringP("namespace", "n", "default", "Target namespace to look up for secrets")
 	applyCmd.Flags().StringSliceP("secrets", "s", empty, "list of secret names to be updated")
 	applyCmd.Flags().String("target-owner", "kubernetes-client.io/v1", "Target ownership value that secrets are going to be updated")
-
 }
