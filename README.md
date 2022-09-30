@@ -11,6 +11,10 @@ The migration process can be done in two ways: manually, or automatically.
 
 Automatic Migration is useful for any user that don't have any templated kes-files.
 
+### Build Binary
+The binary in bin folder might not work on all architectures. The `bin/kestoeso` was observed to be not working on Mac M1 Pro. 
+You can build the binary easily using the command `go build main.go`. The binary named main can be used instead of the `bin/kestoeso`.
+
 ```
 vi migrate.sh # EDIT KES NAMESPACE AND ESO NAMESPACE ENV VARS
 ./migrate.sh
