@@ -361,7 +361,7 @@ func TestBindVaultProvider(t *testing.T) {
 			VaultRole:       "my-role",
 			KvVersion:       2,
 			DataFrom: []string{
-				"path/to/data",
+				"kv/demo-service/credentials",
 			},
 			Data: []apis.KESExternalSecretData{
 				{
