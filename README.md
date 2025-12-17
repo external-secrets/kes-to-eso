@@ -1,3 +1,7 @@
+# Note
+
+ARCHIVED: This repository has been archived and is no longer maintained. Thanks.
+
 # KES to ESO
 kes-to-eso is a tool driven to facilitate migrating from [kubernetes-external-secrets](https://github.com/external-secrets/kubernetes-external-secrets) to [external-secrets](https://github.com/external-secrets/external-secrets)
 
